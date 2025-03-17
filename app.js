@@ -616,10 +616,10 @@ function displayStormAttributes(pointIndex) {
     };
     
     const wedges = [
-        { attr: 'r34_ne', start: 0, end: 90 },
-        { attr: 'r34_se', start: 90, end: 180 },
-        { attr: 'r34_sw', start: 180, end: 270 },
-        { attr: 'r34_nw', start: 270, end: 360 }
+        { attr: 'r34_ne', start: 0, end: 90 },     // NE - correct (top right)
+        { attr: 'r34_se', start: 270, end: 360 },  // SE - swapped from 90-180 to 270-360
+        { attr: 'r34_sw', start: 180, end: 270 },  // SW - correct (bottom left)
+        { attr: 'r34_nw', start: 90, end: 180 }    // NW - swapped from 270-360 to 90-180
     ];
     
     wedges.forEach(wedge => {

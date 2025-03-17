@@ -1,0 +1,1987 @@
+:root {
+    --bg-color: #f8f9fa;
+    --panel-bg: #ffffff;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --accent: #0d6efd;
+    --accent-hover: #0b5ed7;
+    --success: #198754;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --border: #dee2e6;
+    --shadow: rgba(0, 0, 0, 0.05);
+    
+    /* Storm attribute colors */
+    --rmw-color: #ff3b30;
+    --r34-ne-color: #00aaff;
+    --r34-se-color: #00ccaa;
+    --r34-sw-color: #ffaa00;
+    --r34-nw-color: #ff00aa;
+    --roci-color: #8e8e93;
+}
+
+:root {
+    /* Dark mode color scheme with improved contrast */
+    --bg-color: #121212;
+    --panel-bg: #1e1e1e;
+    --text-primary: #ffffff; /* Brighter white for better contrast */
+    --text-secondary: #b3b3b3; /* Lighter secondary text */
+    --accent: #4a94ff; /* Brighter blue for better visibility */
+    --accent-hover: #6ba8ff;
+    --success: #55d68d; /* Brighter success color */
+    --warning: #ffe066; /* Brighter warning color */
+    --danger: #ff6b6b; /* Brighter danger color */
+    --border: #444444; /* Lighter borders for better definition */
+    --shadow: rgba(0, 0, 0, 0.5); /* Deeper shadows */
+    
+    /* Storm attribute colors - even brighter for dark mode */
+    --rmw-color: #ff5f5f;
+    --r34-ne-color: #50c8ff;
+    --r34-se-color: #40ffcc;
+    --r34-sw-color: #ffcc45;
+    --r34-nw-color: #ff55d4;
+    --roci-color: #b8b8c0;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* Optimize body and container */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background-color: var(--bg-color);
+    padding: 8px;
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.container {
+    max-width: 100%;
+    height: calc(100vh - 16px);
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Typography */
+h1 {
+    font-size: 1.1rem;
+    font-weight: 400; /* Thinner font weight */
+    margin: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 170px;
+}
+
+h2 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+h3 {
+    font-size: 1rem;
+    color: #2c3e50;
+    margin-bottom: 6px;
+}
+
+/* Panels */
+.panel {
+    background-color: var(--panel-bg);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px var(--shadow);
+}
+
+.panels {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.half {
+    flex: 1;
+    min-width: 300px;
+}
+
+.top-panels {
+    align-items: center;
+}
+
+/* Compact panels */
+.panel.compact {
+    padding: 8px 12px;
+}
+
+.map-panel {
+    padding: 0;
+    overflow: hidden;
+}
+
+.map-panel #map {
+    margin-bottom: 0;
+    border-radius: 0;
+}
+
+.data-panel {
+    margin-top: 12px;
+}
+
+/* Map */
+#map {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    border-radius: 0;
+}
+
+/* File Upload */
+.file-upload {
+    display: flex;
+    align-items: center;
+    padding: 2px 6px;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    gap: 6px;
+    flex-shrink: 0;
+    width: auto;
+    min-width: 100px;
+}
+
+.upload-icon {
+    color: var(--text-secondary);
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.file-upload.highlight {
+    border-color: var(--accent);
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+.file-label {
+    cursor: pointer;
+    color: var(--accent);
+    text-decoration: underline;
+    margin: 0;
+    white-space: nowrap;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+/* Buttons */
+.btn, button {
+    background-color: var(--accent);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    font-weight: 500;
+}
+
+.btn:hover, button:hover {
+    background-color: var(--accent-hover);
+}
+
+#upload-btn {
+    margin: 0;
+    padding: 2px 6px;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+#update-point-btn {
+    background-color: var(--success);
+}
+
+#update-point-btn:hover {
+    background-color: #0f6848;
+}
+
+#export-btn {
+    background-color: var(--accent);
+    margin-top: 0;
+    width: auto;
+    padding: 3px 8px;
+    font-size: 12px;
+    margin-left: auto;
+}
+
+#export-btn {
+    background-color: var(--accent);
+    margin: 0;
+    padding: 3px 8px;
+    font-size: 12px;
+}
+
+/* Controls */
+.controls {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+    flex-shrink: 0; /* Prevent controls from shrinking */
+}
+
+#mode-status {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    margin: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 60px;
+    text-align: center;
+}
+
+.view-mode {
+    background-color: rgba(13, 110, 253, 0.1);
+    color: var(--accent);
+}
+
+.edit-mode {
+    background-color: rgba(255, 193, 7, 0.1);
+    color: #d97706;
+}
+
+/* Form Elements */
+.edit-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-end;
+}
+
+.form-group {
+    flex: 1;
+    min-width: 150px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+/* Tables */
+.data-container {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 3px 6px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+/* Code Format */
+pre {
+    background-color: #f8f9fa;
+    padding: 6px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    white-space: pre-wrap;
+    margin: 5px 0;
+}
+
+/* Helper Classes */
+.hidden {
+    display: none !important;
+}
+
+.empty-state {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.selected-marker {
+    border: 2px solid #ff3b30 !important;
+    box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.3);
+}
+
+/* Loading Indicator */
+#loading-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.spinner {
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top: 3px solid var(--accent);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Notification - Updated to center in header */
+.notification {
+    position: fixed;
+    top: 6px; /* Aligned with top of header */
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    min-width: 200px;
+    max-width: 80%;
+    z-index: 9999;
+    text-align: center;
+    animation: fade-in 0.3s ease-out forwards;
+    font-weight: 500;
+    width: auto;
+    display: inline-block;
+    pointer-events: none; /* Allow clicking through the notification */
+}
+
+@keyframes fade-in {
+    from { transform: translate(-50%, -20px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+.notification.info {
+    background-color: var(--accent);
+    color: white;
+}
+
+.notification.success {
+    background-color: var(--success);
+    color: white;
+}
+
+.notification.warning {
+    background-color: var(--warning);
+    color: #212529;
+}
+
+.notification.error {
+    background-color: var(--danger);
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .panels {
+        flex-direction: column;
+    }
+    
+    .half {
+        width: 100%;
+    }
+}
+
+/* Map Legend */
+.map-legend {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 6px;
+    border-radius: 4px;
+    margin-top: 0;
+    font-size: 11px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-right: 5px;
+}
+
+.color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 3px;
+}
+
+.color-dot.rmw { background-color: var(--rmw-color); }
+.color-dot.r34-ne { background-color: var(--r34-ne-color); }
+.color-dot.r34-se { background-color: var(--r34-se-color); }
+.color-dot.r34-sw { background-color: var(--r34-sw-color); }
+.color-dot.r34-nw { background-color: var(--r34-nw-color); }
+.color-dot.roci { background-color: var(--roci-color); }
+
+/* Floating Dialog */
+#floating-dialog {
+    position: absolute;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.15);
+    z-index: 1500;
+    padding: 0;
+    min-width: 260px;
+    pointer-events: auto;
+    transform: translate(0, 0);
+    transition: opacity 0.2s ease-in-out;
+}
+
+.dialog-header {
+    padding: 12px 15px;
+    background: linear-gradient(to right, #2a2a2a, #383838); /* Improved gradient for dark mode */
+    border-bottom: 1px solid #444;
+    position: sticky; /* Keep header visible when scrolling */
+    top: 0;
+    z-index: 10;
+}
+
+.dialog-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    color: #ffffff; /* Changed to white for better contrast */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); /* Added text shadow for better legibility */
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.close-btn:hover {
+    color: var(--text-primary);
+    background: none;
+}
+
+/* Update close button hover state for better UX */
+.close-btn:hover {
+    filter: brightness(1.1);
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    color: #000 !important; /* Ensure text remains black on hover */
+    background: inherit; /* Keep the category color */
+}
+
+.dialog-form {
+    padding: 15px;
+}
+
+.floating-form-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.color-indicator {
+    width: 8px;
+    height: 16px;
+    margin-right: 8px;
+    border-radius: 2px;
+}
+
+.floating-form-group label {
+    flex: 1;
+}
+
+.floating-form-group input {
+    width: 80px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+/* Cyclone track styling */
+.cyclone-track {
+    stroke: var(--accent);
+    stroke-width: 3px;
+    stroke-opacity: 0.8;
+    stroke-dasharray: none;
+}
+
+/* Storm attribute visualizations */
+.rmw-circle {
+    stroke: var(--rmw-color);
+    fill: var(--rmw-color);
+    fill-opacity: 0.1;
+    stroke-width: 2;
+}
+
+.roci-circle {
+    stroke: var(--roci-color);
+    fill: var(--roci-color);
+    fill-opacity: 0.1;
+    stroke-width: 1;
+    stroke-dasharray: 5, 5;
+}
+
+.r34-wedge {
+    stroke-width: 1;
+    fill-opacity: 0.2;
+}
+
+.r34_ne {
+    stroke: var(--r34-ne-color);
+    fill: var(--r34-ne-color);
+}
+
+.r34_se {
+    stroke: var(--r34-se-color);
+    fill: var(--r34-se-color);
+}
+
+.r34_sw {
+    stroke: var(--r34-sw-color);
+    fill: var(--r34-sw-color);
+}
+
+.r34_nw {
+    stroke: var(--r34-nw-color);
+    fill: var(--r34-nw-color);
+}
+
+/* Drag handles */
+.drag-handle {
+    background-color: white !important;
+    border: 2px solid var(--accent) !important;
+    border-radius: 50% !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+.drag-handle:hover {
+    background-color: var(--accent) !important;
+}
+
+/* Greyed out markers */
+.greyed-out {
+    opacity: 0.3 !important;
+    filter: grayscale(70%);
+}
+
+/* Hurricane category markers */
+.hurricane-marker {
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+.hurricane-marker.selected-marker {
+    border: 2px solid #fff !important;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.5), 0 0 8px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Hurricane legend */
+#hurricane-legend {
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+    margin-right: 10px;
+    margin-bottom: 30px;
+    min-width: 150px;
+    font-size: 12px;
+}
+
+#hurricane-legend h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+#hurricane-legend .legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+#hurricane-legend .legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+/* Improved floating dialog */
+.compact-dialog {
+    max-width: 240px;
+}
+
+.dialog-header {
+    padding: 8px 12px;
+}
+
+.dialog-header h3 {
+    font-size: 14px;
+    margin: 0;
+}
+
+.dialog-form {
+    padding: 10px;
+}
+
+.dialog-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+}
+
+.floating-form-group {
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+}
+
+.color-indicator {
+    width: 6px;
+    height: 14px;
+    margin-right: 5px;
+    border-radius: 1px;
+}
+
+.floating-form-group label {
+    flex: 1;
+    margin: 0;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.floating-form-group input {
+    width: 45px;
+    padding: 2px 4px;
+    font-size: 11px;
+}
+
+/* Fullscreen styles */
+#map-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+#map-container.fullscreen-mode {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9000;
+}
+
+.fullscreen-mode #map {
+    height: 100vh;
+}
+
+.fullscreen-button {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+}
+
+.fullscreen-button svg {
+    stroke: #333;
+}
+
+/* Enhanced dialog styles */
+.enhanced-dialog {
+    width: 320px;
+    max-width: 90vw;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    max-height: 80vh; /* Limit maximum height */
+    overflow: hidden; /* Hide overflow */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.dialog-header {
+    padding: 12px 15px;
+    background: linear-gradient(to right, #343434, #444444); /* Darker gradient for better contrast */
+    border-bottom: 1px solid #555;
+    position: sticky; /* Keep header visible when scrolling */
+    top: 0;
+    z-index: 10;
+}
+
+.dialog-header h3 {
+    font-size: 15px; /* Slightly larger font */
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    color: #ffffff; /* Brighter white for better contrast */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); /* Enhanced text shadow */
+    margin: 0;
+}
+
+.dialog-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e0e0e0; /* Brighter color for better contrast */
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: 0 0 4px 0;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2); /* Subtle text shadow */
+}
+
+.dialog-section {
+    padding: 12px 15px;
+    background-color: #292929; /* Slightly darker than panel background for contrast */
+    border-bottom: 1px solid #444;
+}
+
+.category-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+    border-radius: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); /* Enhanced text shadow */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Enhanced dialog improvements */
+.enhanced-dialog {
+    width: 320px;
+    max-width: 90vw;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    max-height: 80vh;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.dialog-header {
+    padding: 12px 15px;
+    background: linear-gradient(to right, #f0f2f5, #e6e9f0);
+    border-bottom: 1px solid #e5e5e7;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.dialog-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    color: #333;
+}
+
+.enhanced-dialog .dialog-form {
+    padding: 0;
+    max-height: calc(80vh - 44px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+}
+
+.enhanced-dialog .dialog-form::-webkit-scrollbar {
+    width: 6px;
+}
+
+.enhanced-dialog .dialog-form::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.enhanced-dialog .dialog-form::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.enhanced-dialog .dialog-form::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Scale toggle styling */
+.scale-toggle-container {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+    background-color: #fcfcfd;
+}
+
+.scale-label {
+    font-size: 13px;
+    font-weight: 500;
+    margin-right: 10px;
+    color: #444;
+}
+
+.scale-select {
+    flex: 1;
+    padding: 5px 8px;
+    border: 1px solid #ccd0d5;
+    border-radius: 4px;
+    font-size: 13px;
+    background-color: white;
+    color: #333;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* Field group improvements */
+.field-group {
+    margin: 0;
+    padding: 10px 15px;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.15s ease;
+}
+
+.field-group:hover {
+    background-color: #f7f9fd;
+}
+
+.field-group:last-child {
+    border-bottom: none;
+}
+
+.field-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: #444;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.slider {
+    flex: 1;
+    height: 4px;
+    background: #e1e5eb;
+    border-radius: 2px;
+}
+
+.slider::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+    background: #0d6efd;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.number-input {
+    width: 55px;
+    text-align: center;
+    font-size: 14px;
+    border: 1px solid #ccd0d5;
+    border-radius: 4px;
+    padding: 4px 6px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+}
+
+.color-box {
+    width: 8px;
+    height: 14px;
+    display: inline-block;
+    margin-right: 5px;
+    border-radius: 2px;
+    vertical-align: middle;
+}
+
+/* Badge styling improvements */
+.category-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+    border-radius: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+/* Dialog sections */
+.dialog-section {
+    padding: 12px 15px;
+    background-color: #f9f9fb;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.dialog-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: 0 0 4px 0;
+}
+
+/* Remove duplicate & reversed CSS */
+.popup-content {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    padding: 10px 12px;
+    line-height: 1.4;
+}
+
+.popup-header {
+    padding: 8px 12px;
+    background-color: #f5f7fa;
+    border-bottom: 1px solid #e5e5e7;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.popup-header strong {
+    font-size: 13px;
+    font-weight: 600;
+    min-width: auto !important;
+}
+
+.popup-category {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    color: white;
+    font-weight: 500;
+}
+
+.popup-metrics {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.metric {
+    margin-bottom: 4px;
+}
+
+.popup-attributes, .popup-extra {
+    padding: 8px 12px;
+}
+
+.popup-attributes h4, .popup-extra h4 {
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0 0 6px 0;
+    color: #555;
+}
+
+.attr-row, .popup-extra div {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.popup-attributes label, .popup-extra label {
+    font-weight: 500;
+    color: #666;
+}
+
+.popup-content strong {
+    color: #333;
+    font-weight: 600;
+    display: inline-block;
+    min-width: 80px;
+}
+
+/* Popup customization */
+.leaflet-popup {
+    max-width: 320px !important; /* Increased from 260px */
+}
+
+.leaflet-popup-content-wrapper {
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    padding: 0;
+    border: 3px solid var(--accent);
+    width: auto; /* Let the content determine the width */
+    min-width: 300px; /* Ensure minimum width */
+}
+
+.leaflet-popup-content {
+    margin: 0;
+    padding: 0;
+    min-height: 350px; /* Increased from 250px for taller popups */
+    max-height: 500px; /* Increased from 400px for taller popups */
+    overflow-y: auto;
+    overflow-x: hidden;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    scrollbar-width: thin;
+    width: 100%; /* Ensure content takes full width */
+    min-height: 250px; /* Increased from 150px to ensure all content displays */
+    max-height: 400px; /* Prevent excessive height */
+}
+
+/* Variable names in bold caps - make them narrower */
+.var-name {
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    padding-right: 8px;
+    flex-shrink: 0;
+    flex: 1;
+    min-width: 70px; /* Reduced from 80px to save space */
+}
+
+/* Values with right alignment - give them more space */
+.var-value {
+    text-align: right;
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+    max-width: 180px; /* Increased from 140px to show more data */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    flex-shrink: 1;
+}
+
+/* Ensure the content matches the dark theme */
+.leaflet-popup-content-wrapper {
+    background-color: #1e1e1e;
+    color: var(--text-primary);
+}
+
+/* Apply category color as border to popup header */
+.popup-header {
+    /* Background color is tinted version of category color (set inline) */
+    border-bottom-width: 2px;
+    border-bottom-style: solid;
+}
+
+/* Apply dynamic border color to category popups */
+.category-popup .leaflet-popup-content-wrapper {
+    border-color: inherit; /* Will use the color set in JS */
+}
+
+.category-popup .leaflet-popup-tip {
+    background-color: inherit; /* Will use the color set in JS */
+}
+
+.leaflet-popup-content {
+    margin: 0;
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    scrollbar-width: thin;
+}
+
+.leaflet-popup-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.leaflet-popup-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.leaflet-popup-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.leaflet-popup-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Ensure floating dialog stays on top */
+#floating-dialog {
+    z-index: 1500 !important;
+}
+
+.fullscreen-mode #floating-dialog {
+    position: fixed;
+}
+
+.leaflet-popup-close-button {
+    padding: 8px !important;
+}
+
+/* Compact header */
+header {
+    padding: 6px 8px;
+    background-color: var(--panel-bg);
+    border-radius: 6px;
+    box-shadow: 0 1px 3px var(--shadow);
+    margin-bottom: 8px;
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 10px;
+}
+
+.header-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+/* Maximize map size */
+#map-container {
+    flex: 1;
+    margin: 0;
+    padding: 0;
+    position: relative;
+    border-radius: 6px;
+    overflow: hidden;
+    height: calc(100vh - 60px); /* Adjust based on header height */
+}
+
+/* Basemap control */
+.basemap-control {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+    padding: 0;
+}
+
+#basemap-selector {
+    border: none;
+    background: white;
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23666' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 8px;
+    padding-right: 24px;
+    cursor: pointer;
+    outline: none;
+}
+
+/* Compact bottom panel */
+.bottom-panel {
+    display: flex;
+    align-items: center;
+    background-color: var(--panel-bg);
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-top: 8px;
+    max-height: 100px;
+    overflow: hidden;
+}
+
+.data-container {
+    flex: 1;
+    max-height: 100%;
+    border: none;
+    font-size: 12px;
+}
+
+#csv-format-info {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    margin-left: 10px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+}
+
+.format-title {
+    font-weight: 600;
+}
+
+/* Compact map legend */
+.map-legend {
+    position: absolute;
+    bottom: 20px;
+    left: 10px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 4px;
+    font-size: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    max-width: 300px;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
+    gap: 2px 8px;
+}
+
+.legend-item {
+    white-space: nowrap;
+    margin-right: 0;
+}
+
+.color-dot {
+    width: 8px;
+    height: 8px;
+    margin-right: 2px;
+}
+
+.full-height {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* CSV format info - now floating on the map */
+.floating-format-info {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    z-index: 800;
+}
+
+/* Fixed export button and toggle units button */
+#export-btn, #toggle-units {
+    background-color: var(--accent);
+    margin: 0;
+    padding: 3px 8px;
+    font-size: 12px;
+    display: inline-block !important;
+}
+
+#toggle-units {
+    background-color: #2a9d8f;
+}
+
+#toggle-units:hover {
+    background-color: #1e7168;
+}
+
+/* Ensure sliders are properly visible */
+.slider {
+    flex: 1;
+    height: 4px;
+    background: #e1e5eb;
+    border-radius: 2px;
+    cursor: pointer;
+    appearance: slider-horizontal;
+    -webkit-appearance: none;
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #0d6efd;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    display: block !important;
+}
+
+.slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #0d6efd;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* Make legend title styling consistent */
+.legend-title {
+    font-weight: 600;
+    font-size: 10px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    margin-bottom: 4px;
+    color: #555;
+}
+
+/* Dark mode specific adjustments */
+input, select, button, .btn {
+    background-color: #2c2c2c;
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+input:focus, select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+button, .btn {
+    background-color: var(--accent);
+}
+
+button:hover, .btn:hover {
+    background-color: var(--accent-hover);
+}
+
+th {
+    background-color: #2a2a2a;
+    color: var(--text-primary);
+}
+
+td {
+    border-color: #333;
+}
+
+.file-upload {
+    border-color: #444;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+#basemap-selector {
+    background-color: rgba(30, 30, 30, 0.8);
+    color: var(--text-primary);
+}
+
+/* Improve popup contrast for dark mode */
+.leaflet-popup-content-wrapper {
+    background-color: #1e1e1e;
+    color: var(--text-primary);
+}
+
+.leaflet-popup-tip {
+    background-color: #1e1e1e;
+}
+
+.popup-header {
+    background-color: #2a2a2a;
+    border-color: #444;
+}
+
+.popup-attributes, .popup-metrics {
+    border-color: #333;
+}
+
+.attr-row label, .popup-metrics label {
+    color: #aaaaaa;
+}
+
+/* Hurricane legend dark mode adjustment */
+#hurricane-legend {
+    background-color: rgba(30, 30, 30, 0.85);
+    color: var(--text-primary);
+}
+
+/* Ensure floating dialog matches dark mode */
+#floating-dialog {
+    background-color: var(--panel-bg);
+    color: var(--text-primary);
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+}
+
+.dialog-header {
+    background-color: #2a2a2a;
+    border-bottom: 1px solid #444;
+}
+
+.field-group {
+    border-color: #333;
+}
+
+.field-group:hover {
+    background-color: #2a2a2a;
+}
+
+/* Make the slider track and thumb visible in dark mode */
+.slider {
+    background: #444;
+}
+
+.slider::-webkit-slider-thumb {
+    background: var(--accent);
+    border: 2px solid #333;
+}
+
+.slider::-moz-range-thumb {
+    background: var(--accent);
+    border: 2px solid #333;
+}
+
+/* Helper classes */
+.format-title, .legend-title {
+    color: #bbbbbb;
+}
+
+.floating-format-info {
+    background: rgba(30, 30, 30, 0.9);
+    color: var(--text-secondary);
+}
+
+.map-legend {
+    background: rgba(30, 30, 30, 0.9);
+    color: var(--text-primary);
+}
+
+/* Category badge */
+.category-badge {
+    text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+}
+
+/* Enhanced dark mode adjustments */
+body {
+    color: var(--text-primary);
+    background-color: var(--bg-color);
+}
+
+input, select, button, .btn {
+    background-color: #2c2c2c;
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+input:focus, select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+button, .btn {
+    background-color: var(--accent);
+}
+
+button:hover, .btn:hover {
+    background-color: var(--accent-hover);
+}
+
+/* Improve form element contrast */
+.slider {
+    background: #444;
+}
+
+.slider::-webkit-slider-thumb {
+    background: var(--accent);
+    border: 2px solid #333;
+}
+
+.slider::-moz-range-thumb {
+    background: var(--accent);
+    border: 2px solid #333;
+}
+
+/* Number value display for sliders */
+.slider-value {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* Dialog adjustments for dark mode */
+#floating-dialog {
+    background-color: var(--panel-bg);
+    color: var(--text-primary);
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+    z-index: 9000 !important; /* Higher z-index to ensure visibility */
+    display: block;
+}
+
+.dialog-header {
+    background-color: #2a2a2a;
+    border-bottom: 1px solid #444;
+}
+
+.dialog-header h3 {
+    color: var(--text-primary);
+}
+
+/* Improve section headers contrast */
+.dialog-section {
+    background-color: #252525; /* Darker than panel background */
+    border-color: #444;
+}
+
+.dialog-section-title {
+    color: #cccccc; /* Lighter text for headers */
+}
+
+/* Field groups in dialog */
+.field-group {
+    border-color: #444;
+    padding: 10px 15px;
+    background-color: var(--panel-bg);
+    transition: background-color 0.15s ease;
+}
+
+.field-group:hover {
+    background-color: #2a2a2a;
+}
+
+.field-group label {
+    color: var(--text-primary);
+}
+
+/* Formatted values in dialog */
+#formatted-wind_speed, [id^="formatted-"] {
+    color: var(--text-primary) !important;
+    display: inline-block;
+    min-width: 65px;
+    text-align: right;
+}
+
+/* Popup styling */
+.leaflet-popup-content-wrapper {
+    background-color: #1e1e1e;
+    color: var(--text-primary);
+}
+
+.leaflet-popup-tip {
+    background-color: #1e1e1e;
+}
+
+.popup-header {
+    background-color: #2a2a2a;
+    border-color: #444;
+}
+
+.popup-attributes, .popup-metrics {
+    border-color: #333;
+}
+
+.attr-row label, .popup-metrics label {
+    color: #cccccc; /* Lighter color for better contrast */
+}
+
+.popup-content strong {
+    color: var(--text-primary);
+}
+
+/* Legends */
+#hurricane-legend, .map-legend {
+    background-color: rgba(30, 30, 30, 0.9);
+    color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.legend-title {
+    color: #cccccc;
+}
+
+/* Scale toggle elements */
+.scale-toggle-container {
+    background-color: #252525;
+    border-color: #444;
+}
+
+.scale-label {
+    color: var(--text-primary);
+}
+
+.scale-select {
+    background-color: #333;
+    color: var(--text-primary);
+    border-color: #555;
+}
+
+/* Make placeholder text readable */
+::placeholder {
+    color: #999;
+}
+
+/* Information box visibility */
+.floating-format-info {
+    background: rgba(30, 30, 30, 0.92);
+    color: #cccccc;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Improved Leaflet popup styling */
+.leaflet-popup-content-wrapper {
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    padding: 0;
+    border: 3px solid var(--accent);
+}
+
+.popup-content {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    line-height: 1.4;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.popup-header {
+    padding: 8px 12px;
+    background-color: #2a2a2a;
+    border-bottom: 1px solid #444;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.popup-header strong {
+    font-size: 13px;
+    font-weight: 600;
+    min-width: auto !important;
+}
+
+/* Metrics and data rows with improved alignment */
+.popup-metrics, .popup-extra {
+    padding: 8px 12px;
+}
+
+.popup-metrics {
+    border-bottom: 1px solid #333;
+}
+
+.metric, .data-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    align-items: baseline;
+}
+
+/* Variable names in bold caps */
+.var-name {
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    padding-right: 8px;
+    flex-shrink: 0;
+    flex: 1;
+    min-width: 70px; /* Reduced from 80px to save space */
+}
+
+/* Values with right alignment */
+.var-value {
+    text-align: right;
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+    max-width: 180px; /* Increased from 140px to show more data */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    flex-shrink: 1;
+}
+
+.popup-extra h4 {
+    font-size: 11px;
+    font-weight: 700;
+    margin: 4px 0 10px 0;
+    color: #bbb;
+    text-transform: uppercase;
+}
+
+/* Add styling for the metrics divider and section header */
+.metric-divider {
+    margin: 8px 0;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,0.15); /* Slightly brighter divider */
+    text-align: center;
+}
+
+.metric-section {
+    font-size: 11px; /* Slightly larger */
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #cccccc; /* Brighter color for better contrast */
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    background-color: rgba(255, 255, 255, 0.1); /* Subtle background for contrast */
+    border-radius: 2px;
+    display: inline-block;
+}
+
+/* Right-side popup positioning adjustments - refined to be more robust */
+.leaflet-popup {
+    margin-left: 20px !important; /* Force margin to ensure it's away from markers */
+}
+
+.leaflet-popup-content-wrapper {
+    margin-left: 10px;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.2), 0 2px 5px rgba(0,0,0,0.2) !important;
+}
+
+.leaflet-popup-tip-container {
+    left: -20px !important;
+    right: auto !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    transform: rotate(90deg) !important;
+    width: 20px !important;
+    height: 17px !important;
+    position: absolute !important;
+}
+
+.leaflet-popup-tip {
+    transform: rotate(135deg);
+    box-shadow: none !important;
+    background-color: inherit; /* Will inherit from the popup wrapper */
+}
+
+/* Ensure the popup stays positioned correctly */
+.category-popup {
+    transform: none !important;
+}
+
+/* Right-side popup positioning adjustments */
+.leaflet-popup-content-wrapper {
+    margin-left: 10px;
+}
+
+.leaflet-popup-tip-container {
+    left: -20px;
+    right: auto;
+    margin-left: 0;
+    margin-right: 0;
+    transform: rotate(90deg);
+}
+
+/* Ensure the popup tip points to the left toward the marker */
+.leaflet-popup-tip {
+    transform: rotate(135deg);
+    margin: 0 auto;
+    box-shadow: none;
+}
+
+.leaflet-popup {
+    margin-bottom: 0;
+}
+
+/* Ensure popup header text is always readable */
+.popup-header strong {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6) !important;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: auto !important;
+}
+
+/* Ensure dialog title is always readable */
+#floating-dialog .dialog-header strong {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Updated more compact dialog header */
+.dialog-header {
+    padding: 6px 10px !important; /* Overriding for consistency */
+    background: linear-gradient(to right, #343434, #444444);
+    border-bottom: 1px solid #555;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* More compact category badge for dialog */
+#floating-dialog .popup-category {
+    padding: 2px 6px !important;
+    font-size: 10px !important;
+    border-radius: 10px !important;
+}
+
+/* More compact close button */
+#floating-dialog .close-btn {
+    width: 18px !important;
+    height: 18px !important;
+    font-size: 14px !important;
+    margin-left: 8px !important;
+}
+
+/* Compact controls section */
+.compact-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.compact-controls button {
+    padding: 3px 8px;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+/* Add initial value indicator for sliders */
+.slider-container {
+    position: relative;
+    flex: 1;
+    height: 20px; /* Increased height to ensure indicator is visible */
+    display: flex;
+    align-items: center;
+}
+
+.initial-value-indicator {
+    position: absolute;
+    top: -1px;  /* Extended slightly above */
+    bottom: -1px; /* Extended slightly below */
+    width: 4px; /* Increased width from 2px to 4px for better visibility */
+    background-color: rgba(240, 240, 240, 0.95); /* Much brighter white/grey */
+    pointer-events: none;
+    z-index: 2;
+    height: 16px; /* Increased height from 14px */
+    margin-top: 2px; /* Center it vertically */
+    border-radius: 1px; /* Slightly rounded corners */
+    box-shadow: 0 0 2px rgba(0,0,0,0.5); /* Add shadow for contrast */
+}
+
+/* Dark mode specific adjustment for the indicator */
+body.dark-mode .initial-value-indicator,
+:root .initial-value-indicator {
+    background-color: rgba(250, 250, 250, 0.9); /* Even brighter in dark mode */
+    box-shadow: 0 0 3px rgba(255,255,255,0.3); /* Light glow in dark mode */
+}
+
+/* Make sure the slider track is visible in the container */
+.slider-container .slider {
+    width: 100%;
+    position: relative;
+    z-index: 3;
+    margin: 0;
+}
+
+/* Make sure the slider thumb appears above the indicator */
+input[type="range"] {
+    position: relative;
+    z-index: 3;
+}
+
+/* Style for the scale select dropdown in the header */
+.btn-select {
+    background-color: var(--accent);
+    color: white;
+    border: none;
+    padding: 6px 12px; /* Slightly smaller padding to match other buttons */
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px; /* Match size with other header buttons */
+    transition: background-color 0.2s;
+    font-weight: 500;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23fff' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+    display: inline-block; /* Ensure it displays as a block */
+    max-width: 150px; /* Limit width */
+    width: auto;
+}
+
+.btn-select:hover {
+    background-color: var(--accent-hover);
+}
+
+/* Dark mode specific styling to ensure visibility */
+.btn-select {
+    background-color: #444444; /* Darker background to stand out */
+    color: white; /* White text for contrast */
+    border: 1px solid #666666; /* Visible border */
+}
+
+.compact-controls .btn-select {
+    margin: 0 3px; /* Add margin for spacing between buttons */
+}
+
+.btn-select option {
+    background-color: var(--panel-bg);
+    color: var(--text-primary);
+    padding: 4px;
+}
+
+/* Add styling for control labels */
+.control-label {
+    margin-right: 2px;
+    margin-left: 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+/* Enhanced Title and Author Credit */
+.title-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-right: 10px;
+}
+
+.app-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 170px;
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    background: linear-gradient(to right, var(--text-primary), var(--text-secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+}
+
+.author-credit {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    opacity: 0.75;
+    margin-top: -2px;
+    padding-left: 2px;
+    letter-spacing: 0.02em;
+}

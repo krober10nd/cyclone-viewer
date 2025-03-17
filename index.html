@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyclone Track Editor/Visualizer</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="notification" class="notification hidden"></div>
+    <div id="floating-dialog" class="hidden"></div>
+    
+    <div class="container">
+        <header>
+            <div class="header-row">
+                <div class="title-container">
+                    <h1 class="app-title">Cyclone Track Editor</h1>
+                    <span class="author-credit">by Keith Roberts</span>
+                </div>
+                <div class="header-controls-group">
+                    <div id="drop-zone" class="file-upload">
+                        <div class="upload-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                        </div>
+                        <label for="csv-file" class="file-label">CSV</label>
+                        <input type="file" id="csv-file" accept=".csv" class="hidden" />
+                        <button id="upload-btn">Load</button>
+                        <div id="loading-indicator" class="hidden">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="compact-controls">
+                        <button id="toggle-edit-mode" class="btn">Edit Mode</button>
+                        <span id="mode-status" class="view-mode">Position</span>
+                        
+                        <!-- Make the scale selector more prominent with label -->
+                        <span class="control-label">Scale:</span>
+                        <select id="scale-select" class="btn-select" title="Change intensity scale">
+                            <option value="saffir-simpson">Saffir-Simpson</option>
+                            <option value="bom">Australian (BoM)</option>
+                        </select>
+                        
+                        <button id="toggle-units" class="btn">Units</button>
+                        <button id="export-btn">Export</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div id="map-container" class="panel full-height">
+            <div id="map"></div>
+            <div id="basemap-control" class="basemap-control">
+                <select id="basemap-selector" title="Change basemap">
+                    <option value="osm">OpenStreetMap</option>
+                    <option value="carto">Carto Voyager (Roads)</option>
+                    <option value="topo">OpenTopoMap</option>
+                    <option value="satellite" selected>Satellite</option>
+                    <option value="terrain">Terrain</option>
+                </select>
+            </div>
+            <div class="map-legend">
+                <div class="legend-title">Storm Size (km)</div>
+                <div class="legend-item"><span class="color-dot rmw"></span> RMW</div>
+                <div class="legend-item"><span class="color-dot r34-ne"></span> R34 NE</div>
+                <div class="legend-item"><span class="color-dot r34-se"></span> R34 SE</div>
+                <div class="legend-item"><span class="color-dot r34-sw"></span> R34 SW</div>
+                <div class="legend-item"><span class="color-dot r34-nw"></span> R34 NW</div>
+                <div class="legend-item"><span class="color-dot roci"></span> ROCI</div>
+            </div>
+            <!-- <div id="csv-format-info" class="floating-format-info">
+                <span class="format-title">CSV Format:</span> latitude,longitude,rmw,r34_ne,r34_se,r34_sw,r34_nw,roci
+            </div> -->
+            
+            <!-- Edit mode panel with sliders -->
+            <div id="edit-panel" class="edit-panel hidden">
+                <h3>Storm Parameters</h3>
+                <div class="slider-control">
+                    <label for="rmw-slider">RMW (km):</label>
+                    <input type="range" id="rmw-slider" class="slider" min="0" max="100" step="1">
+                    <span id="rmw-value" class="slider-value">0</span>
+                </div>
+                <div class="slider-control">
+                    <label for="r34-ne-slider">R34 NE (km):</label>
+                    <input type="range" id="r34-ne-slider" class="slider" min="0" max="500" step="5">
+                    <span id="r34-ne-value" class="slider-value">0</span>
+                </div>
+                <div class="slider-control">
+                    <label for="r34-se-slider">R34 SE (km):</label>
+                    <input type="range" id="r34-se-slider" class="slider" min="0" max="500" step="5">
+                    <span id="r34-se-value" class="slider-value">0</span>
+                </div>
+                <div class="slider-control">
+                    <label for="r34-sw-slider">R34 SW (km):</label>
+                    <input type="range" id="r34-sw-slider" class="slider" min="0" max="500" step="5">
+                    <span id="r34-sw-value" class="slider-value">0</span>
+                </div>
+                <div class="slider-control">
+                    <label for="r34-nw-slider">R34 NW (km):</label>
+                    <input type="range" id="r34-nw-slider" class="slider" min="0" max="500" step="5">
+                    <span id="r34-nw-value" class="slider-value">0</span>
+                </div>
+                <div class="slider-control">
+                    <label for="roci-slider">ROCI (km):</label>
+                    <input type="range" id="roci-slider" class="slider" min="0" max="1000" step="10">
+                    <span id="roci-value" class="slider-value">0</span>
+                </div>
+                <button id="apply-changes" class="btn">Apply Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="field-mapper.js"></script>
+    <script src="popup-template.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

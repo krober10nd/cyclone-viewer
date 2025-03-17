@@ -1,0 +1,20 @@
+{
+    "name": "cyclone_viewer",
+    "version": "1.0.0",
+    "description": "Cyclone Track Editor/Visualizer",
+    "main": "main.js",
+    "scripts": {
+        "start": "electron .",
+        "package": "electron-packager . CycloneTracker --platform=darwin,linux --arch=x64 --out=release-builds --overwrite",
+        "package:mac": "electron-packager . CycloneTracker --platform=darwin --arch=x64 --out=release-builds --overwrite",
+        "package:win": "ELECTRON_PACKAGER_WINE=\"$(which wine)\" electron-packager . CycloneTracker --platform=win32 --arch=x64 --out=release-builds --overwrite",
+        "package:linux": "electron-packager . CycloneTracker --platform=linux --arch=x64 --out=release-builds --overwrite",
+        "package:all": "npm run package:mac && npm run package:linux && npm run package:win"
+    },
+    "dependencies": {
+        "electron": "^26.0.0"
+    },
+    "devDependencies": {
+        "electron-packager": "^17.1.2"
+    }
+}

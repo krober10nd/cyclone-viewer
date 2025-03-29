@@ -7,6 +7,7 @@ let selectedPoint = null;
 let trackLine = null;
 let stormCircles = {}; // Store visualizations for RMW, R34, ROCI
 let floatingDialog = null;
+let ghostMarkers = {}; // Store ghost markers for original positions
 
 // Unit system: 'metric' or 'imperial'
 let unitSystem = 'metric';
@@ -67,6 +68,28 @@ function getHurricaneCategory(windSpeed) {
         }
     }
     return scale[scale.length - 1]; // Default to highest category
+}
+
+// Add a wind-pressure relationship function
+function calculatePressureFromWind(windSpeed) {
+    // Wind speed should be in m/s
+    
+    // Default environmental pressure (hPa)
+    const environmentalPressure = 1010;
+    
+    // Different coefficients for different basins/regions
+    // Using a general Atlantic basin coefficient
+    const coefficient = 120;
+    
+    // Quadratic wind-pressure relationship (simplified)
+    // P = Env_P - (wind_speed^2 / C)
+    // This is a simplified version of common wind-pressure relationships
+    const pressureDrop = Math.pow(windSpeed, 2) / coefficient;
+    
+    // Calculate minimum central pressure (limited to realistic values)
+    const minPressure = Math.max(880, Math.min(1010, Math.round(environmentalPressure - pressureDrop)));
+    
+    return minPressure;
 }
 
 // Basemap layers
@@ -616,10 +639,10 @@ function displayStormAttributes(pointIndex) {
     };
     
     const wedges = [
-        { attr: 'r34_ne', start: 0, end: 90 },     // NE - correct (top right)
-        { attr: 'r34_se', start: 270, end: 360 },  // SE - swapped from 90-180 to 270-360
-        { attr: 'r34_sw', start: 180, end: 270 },  // SW - correct (bottom left)
-        { attr: 'r34_nw', start: 90, end: 180 }    // NW - swapped from 270-360 to 90-180
+        { attr: 'r34_ne', start: 0, end: 90 },
+        { attr: 'r34_se', start: 90, end: 180 },
+        { attr: 'r34_sw', start: 180, end: 270 },
+        { attr: 'r34_nw', start: 270, end: 360 }
     ];
     
     wedges.forEach(wedge => {
@@ -816,6 +839,30 @@ function createFloatingDialog(pointIndex) {
     dialogContainer.classList.add('enhanced-dialog');
     dialogContainer.style.zIndex = '1500'; // Ensure high z-index
     
+    // Add semi-transparent slider thumb styles
+    const sliderStyles = document.createElement('style');
+    sliderStyles.textContent = `
+        /* Make slider thumbs semi-transparent to show initial value indicators */
+        #floating-dialog input[type=range]::-webkit-slider-thumb {
+            opacity: 0.8;
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+        #floating-dialog input[type=range]::-moz-range-thumb {
+            opacity: 0.8;
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+        #floating-dialog input[type=range]::-ms-thumb {
+            opacity: 0.8;
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+        /* Make initial value indicators more visible */
+        #floating-dialog .initial-value-indicator {
+            background-color: rgba(255, 200, 50, 0.9);
+            width: 3px;
+        }
+    `;
+    dialogContainer.appendChild(sliderStyles);
+    
     // Get hurricane category based on current wind speed
     const category = getHurricaneCategory(point.wind_speed);
     
@@ -1001,7 +1048,7 @@ function createFloatingDialog(pointIndex) {
     
     form.appendChild(meteoSection);
     
-    // Handle wind speed changes with unit awareness
+    // Handle wind speed changes with unit awareness and pressure relation
     windSlider.oninput = function() {
         const value = parseFloat(this.value);
         // Update formatted display with correct units
@@ -1012,8 +1059,30 @@ function createFloatingDialog(pointIndex) {
         
         // Update data (always store in m/s internally)
         data[pointIndex].wind_speed = value;
+        
+        // Calculate and update pressure based on wind-pressure relationship
+        const newPressure = calculatePressureFromWind(value);
+        data[pointIndex].mslp = newPressure;
+        
+        // Update pressure slider and display
+        const pressureSlider = document.getElementById('slider-mslp');
+        if (pressureSlider) {
+            pressureSlider.value = newPressure;
+            
+            // Calculate percentage for gradient (1050-880 range)
+            const pressureRange = 170; // 1050 - 880
+            const pressurePercent = Math.max(0, Math.min(100, ((1050 - newPressure) / pressureRange) * 100));
+            pressureSlider.style.background = `linear-gradient(to right, ${pressureColor} 0%, ${pressureColor} ${pressurePercent}%, #444 ${pressurePercent}%, #444 100%)`;
+            
+            // Update formatted pressure display
+            const pressureDisplay = document.getElementById('formatted-mslp');
+            if (pressureDisplay) {
+                pressureDisplay.textContent = newPressure + ' hPa';
+                pressureDisplay.innerHTML = newPressure + ' hPa <small style="color:#aaa;font-size:9px;">(auto)</small>';
+            }
+        }
     };
-    
+
     windSlider.onchange = function() {
         const value = parseFloat(this.value);
         data[pointIndex].wind_speed = value;
@@ -1023,18 +1092,25 @@ function createFloatingDialog(pointIndex) {
         displayMarkers();
     };
     
-    // Handle pressure changes
+    // Update the pressure slider handler to disconnect the auto-relationship when manually adjusted
     pressureSlider.oninput = function() {
         const value = parseInt(this.value);
         // Update formatted display
-        document.getElementById('formatted-mslp').textContent = value + ' hPa';
+        const pressureDisplay = document.getElementById('formatted-mslp');
+        if (pressureDisplay) {
+            pressureDisplay.textContent = value + ' hPa';
+            // Remove the "auto" indicator to show it's manually set
+            pressureDisplay.innerHTML = value + ' hPa';
+        }
+        
         // Update gradient (1050-880 range)
         const pressurePercent = ((1050 - value) / 170) * 100;
         this.style.background = `linear-gradient(to right, ${pressureColor} 0%, ${pressureColor} ${pressurePercent}%, #444 ${pressurePercent}%, #444 100%)`;
+        
         // Update data
         data[pointIndex].mslp = value;
     };
-    
+
     // Add Storm Size section header
     const sizeSection = document.createElement('div');
     sizeSection.className = 'dialog-section';
@@ -1372,8 +1448,8 @@ function formatMetersForDisplay(valueMeters, decimals = 0) {
     return metersToDisplayUnits(valueMeters, decimals);
 }
 
-// Modified marker creation with dynamic popup styling
-function displayMarkers() {
+// Modified marker creation with dynamic popup styling - now with fitBounds parameter
+function displayMarkers(fitBounds = true) {
     // Clear existing markers
     markers.forEach(marker => map.removeLayer(marker));
     markers = [];
@@ -1483,8 +1559,43 @@ function displayMarkers() {
         
         // Add drag event handling
         if (editMode) {
+            // Add dragstart handler to create ghost marker of original position
+            marker.on('dragstart', function(e) {
+                // Store original position and create ghost marker
+                createGhostMarker(index, e.target.getLatLng());
+            });
+            
+            // Update track line during dragging (not just at the end)
+            marker.on('drag', function(e) {
+                // Update data coordinates in real-time
+                data[index].latitude = e.latlng.lat;
+                data[index].longitude = e.latlng.lng;
+                
+                // Redraw track line during drag for continuous feedback
+                displayTrackLine();
+            });
+            
             marker.on('dragend', function(e) {
                 updatePointLocation(index, e.target.getLatLng());
+                
+                // Check if marker is back at original position (within small threshold)
+                const ghostMarker = ghostMarkers[index];
+                if (ghostMarker) {
+                    const originalPos = ghostMarker.getLatLng();
+                    const currentPos = e.target.getLatLng();
+                    const distance = originalPos.distanceTo(currentPos);
+                    
+                    // If very close to original position, snap back
+                    if (distance < 5) { // 5 meters threshold
+                        e.target.setLatLng(originalPos);
+                        data[index].latitude = originalPos.lat;
+                        data[index].longitude = originalPos.lng;
+                        displayTrackLine();
+                    }
+                }
+                
+                // Remove ghost marker regardless
+                removeGhostMarker(index);
             });
         }
         
@@ -1493,14 +1604,58 @@ function displayMarkers() {
         markers.push(marker);
     });
 
-    // Fit map bounds to show all markers
-    if (markers.length > 0) {
+    // Only fit bounds if explicitly requested
+    if (fitBounds && markers.length > 0) {
         const group = new L.featureGroup(markers);
         map.fitBounds(group.getBounds());
     }
     
     // Draw the track line connecting points
     displayTrackLine();
+}
+
+// Create a ghost marker at the original position
+function createGhostMarker(index, originalPosition) {
+    // Remove any existing ghost marker for this index
+    removeGhostMarker(index);
+    
+    // Get the category for styling
+    const point = data[index];
+    const category = getHurricaneCategory(point.wind_speed);
+    
+    // Create ghost icon (greyed out version of the regular icon)
+    const ghostIcon = L.divIcon({
+        className: 'hurricane-marker ghost-marker category-' + category.name.toLowerCase().replace(/\s+/g, '-'),
+        iconSize: [category.radius * 2, category.radius * 2],
+        html: `<div style="background-color: ${category.color}; opacity: 0.3; width: 100%; height: 100%; border-radius: 50%;"></div>`,
+        iconAnchor: [category.radius, category.radius]
+    });
+    
+    // Create and add the ghost marker
+    const ghostMarker = L.marker(originalPosition, {
+        icon: ghostIcon,
+        interactive: false, // Cannot be clicked
+        keyboard: false,    // No keyboard interaction
+        zIndexOffset: -1000 // Ensure it's below the actual marker
+    }).addTo(map);
+    
+    // Store the ghost marker
+    ghostMarkers[index] = ghostMarker;
+}
+
+// Remove a ghost marker
+function removeGhostMarker(index) {
+    if (ghostMarkers[index]) {
+        map.removeLayer(ghostMarkers[index]);
+        delete ghostMarkers[index];
+    }
+}
+
+// Clear all ghost markers
+function clearAllGhostMarkers() {
+    Object.keys(ghostMarkers).forEach(index => {
+        removeGhostMarker(parseInt(index));
+    });
 }
 
 // Select a point for editing
@@ -1526,14 +1681,23 @@ function updatePointLocation(index, latlng) {
     data[index].latitude = latlng.lat;
     data[index].longitude = latlng.lng;
     
-    // Update data table
-    createTable(data, 'table-container');
+    // Update data table if it exists
+    const tableContainer = document.getElementById('table-container');
+    if (tableContainer) {
+        createTable(data, 'table-container');
+    }
     
     // Update the track line
     displayTrackLine();
+    
+    // If we're in edit mode, update any visualizations for this point
+    if (editMode && stormCircles[index]) {
+        clearStormVisualizations(index);
+        displayStormAttributes(index);
+    }
 }
 
-// Toggle edit mode - updated with more descriptive mode names
+// Toggle edit mode - updated to preserve map view
 function toggleEditMode() {
     editMode = !editMode;
     
@@ -1546,6 +1710,9 @@ function toggleEditMode() {
     // Clear all storm visualizations
     clearAllStormVisualizations();
     
+    // Clear all ghost markers when toggling edit mode
+    clearAllGhostMarkers();
+    
     // Update UI
     const modeStatus = document.getElementById('mode-status');
     if (editMode) {
@@ -1556,8 +1723,8 @@ function toggleEditMode() {
         modeStatus.className = 'view-mode';
     }
     
-    // Reload markers with new draggable status
-    displayMarkers();
+    // Reload markers with new draggable status but preserve current view
+    displayMarkers(false); // Pass false to prevent fitting bounds
 }
 
 // Populate point selector
@@ -1649,8 +1816,8 @@ async function loadCSVFile(file) {
             throw new Error("No valid coordinates found in the file.");
         }
         
-        // Display markers on map
-        displayMarkers();
+        // Display markers on map - in this case we DO want to fit bounds
+        displayMarkers(true);
         
         // Show export button
         document.getElementById('export-btn').classList.remove('hidden');
@@ -1707,8 +1874,17 @@ function addCategoryLegend() {
     const windUnit = unitSystem === 'metric' ? 'm/s' : 'mph';
     legendDiv.innerHTML = `<h4>${scaleName} Scale (${windUnit})</h4>`;
     
+    // Find the threshold for the highest category
+    let cat5Threshold = 0;
+    for (let i = 0; i < scale.length; i++) {
+        if (scale[i].maxWind === Infinity && i > 0) {
+            cat5Threshold = scale[i-1].maxWind;
+            break;
+        }
+    }
+    
     // Add each category
-    scale.forEach(category => {
+    scale.forEach((category, index) => {
         const item = document.createElement('div');
         item.className = 'legend-item';
         
@@ -1723,10 +1899,16 @@ function addCategoryLegend() {
             displayMaxWind = displayMaxWind * UNIT_CONVERSIONS.WIND_MS_TO_MPH;
         }
         
+        // Get threshold value for highest category
+        let thresholdValue = cat5Threshold;
+        if (unitSystem === 'imperial') {
+            thresholdValue = thresholdValue * UNIT_CONVERSIONS.WIND_MS_TO_MPH;
+        }
+        
         const label = document.createElement('span');
-        // Show wind speed for each category except the highest which is infinite
+        // Show wind speed for each category - now with >= for Category 5
         if (category.maxWind === Infinity) {
-            label.textContent = `${category.name}`;
+            label.textContent = `${category.name} (≥${Math.round(thresholdValue)})`;
         } else {
             label.textContent = `${category.name} (≤${Math.round(displayMaxWind)})`;
         }

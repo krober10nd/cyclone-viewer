@@ -8,6 +8,254 @@ let trackLine = null;
 let stormCircles = {}; // Store visualizations for RMW, R34, ROCI
 let floatingDialog = null;
 let ghostMarkers = {}; // Store ghost markers for original positions
+let isochroneUpdateTimeout = null; // Timeout for updating isochrones
+
+// Add these variables to your global scope
+let currentIsochrones = [];
+let selectedPointIndex = null;
+
+// Function to display isochrones (+1h, +2h, +3h) when a point is clicked
+function showIsochrones(pointIndex) {
+    // Clear any existing isochrones
+    clearIsochrones();
+    
+    console.log(`Showing isochrones for point ${pointIndex}`);
+    
+    // Store selected point index
+    selectedPointIndex = pointIndex;
+    
+    // Get current position
+    const currentPoint = data[pointIndex];
+    
+    // Calculate trajectory (direction)
+    let trajectory = 0; // Default direction (north)
+    
+    // If not the last point, calculate direction to next point
+    if (pointIndex < data.length - 1) {
+        const nextPoint = data[pointIndex + 1];
+        trajectory = calculateBearing(
+            currentPoint.latitude, 
+            currentPoint.longitude, 
+            nextPoint.latitude, 
+            nextPoint.longitude
+        );
+    } 
+    // If not the first point, calculate direction from previous point
+    else if (pointIndex > 0) {
+        const prevPoint = data[pointIndex - 1];
+        trajectory = calculateBearing(
+            prevPoint.latitude, 
+            prevPoint.longitude, 
+            currentPoint.latitude, 
+            currentPoint.longitude
+        );
+    }
+    
+    // Get cyclone speed in km/hour
+    const speedKmPerHour = estimateSpeed(pointIndex);
+    console.log(`Calculated trajectory: ${trajectory.toFixed(1)}° with speed ${speedKmPerHour.toFixed(2)} km/h`);
+    
+    // Define colors for each hour isochrone - using more distinguishable colors
+    const isochroneColors = [
+        'rgba(100, 220, 255, 0.8)',  // +1h - Light blue
+        'rgba(255, 200, 0, 0.8)',    // +2h - Orange/gold
+        'rgba(255, 50, 50, 0.8)'     // +3h - Red
+    ];
+    
+    // For debugging, show where the next point would be if the data follows the expected pattern
+    if (pointIndex < data.length - 1) {
+        const nextPoint = data[pointIndex + 1];
+        const distanceToNext = calculateDistanceKm(
+            currentPoint.latitude, currentPoint.longitude,
+            nextPoint.latitude, nextPoint.longitude
+        );
+        console.log(`Distance to next point: ${distanceToNext.toFixed(2)} km`);
+        console.log(`Next point should be approximately at +${(distanceToNext/speedKmPerHour).toFixed(1)} hours`);
+    }
+    
+    // Draw isochrones for +1h, +2h, +3h with more spacing between them
+    [1, 2, 3].forEach((hours, index) => {
+        const isochronePoints = [];
+        
+        // Create a fan of points at ±90 degrees from trajectory
+        for (let angle = trajectory - 90; angle <= trajectory + 90; angle += 15) {
+            // Calculate distance in km for this hour
+            const distanceKm = speedKmPerHour * hours;
+            
+            // Calculate destination point
+            const point = calculateDestinationFromKm(
+                currentPoint.latitude,
+                currentPoint.longitude,
+                distanceKm,
+                angle
+            );
+            isochronePoints.push(point);
+        }
+        
+        // Create a polyline for this isochrone with different color and width
+        const polyline = L.polyline(isochronePoints, {
+            color: isochroneColors[index],
+            weight: 1.5 + (hours * 0.5), // Thicker lines for later hours
+            dashArray: '5, 5',
+            opacity: 0.9,
+            smoothFactor: 2,
+            className: 'isochrone-line'
+        }).addTo(map);
+        
+        // Add a label showing the hour - positioned at a point just above the midpoint
+        const midPointIndex = Math.floor(isochronePoints.length / 2);
+        const midPoint = isochronePoints[midPointIndex];
+        
+        // Calculate a position for the label that's slightly offset from the line
+        const labelAngle = trajectory; // Use the trajectory angle for offset
+        const labelOffsetKm = 5; // Small offset in km
+        const labelPoint = calculateDestinationFromKm(
+            midPoint[0], midPoint[1], 
+            labelOffsetKm, 
+            (labelAngle + 90) % 360 // Perpendicular to trajectory
+        );
+        
+        const label = L.marker(labelPoint, {
+            icon: L.divIcon({
+                className: 'isochrone-label',
+                html: `+${hours}h`,
+                iconSize: [36, 20],
+                iconAnchor: [18, 10]
+            }),
+            interactive: false
+        }).addTo(map);
+        
+        currentIsochrones.push(polyline);
+        currentIsochrones.push(label);
+    });
+}
+
+// Function to clear isochrones
+function clearIsochrones() {
+    if (currentIsochrones.length > 0) {
+        console.log("Clearing isochrones");
+        currentIsochrones.forEach(layer => map.removeLayer(layer));
+        currentIsochrones = [];
+        selectedPointIndex = null;
+    }
+}
+
+// Helper function to calculate bearing between two points
+function calculateBearing(lat1, lon1, lat2, lon2) {
+    const rlat1 = lat1 * Math.PI / 180;
+    const rlat2 = lat2 * Math.PI / 180;
+    const rlon1 = lon1 * Math.PI / 180;
+    const rlon2 = lon2 * Math.PI / 180;
+    
+    const y = Math.sin(rlon2 - rlon1) * Math.cos(rlat2);
+    const x = Math.cos(rlat1) * Math.sin(rlat2) -
+              Math.sin(rlat1) * Math.cos(rlat2) * Math.cos(rlon2 - rlon1);
+    let bearing = Math.atan2(y, x) * 180 / Math.PI;
+    
+    return (bearing + 360) % 360; // Normalize to 0-360
+}
+
+// New function that calculates destination using km directly
+function calculateDestinationFromKm(lat, lon, distanceKm, bearing) {
+    // Earth radius in km
+    const R = 6371;
+    
+    // Convert to radians
+    const rlat = lat * Math.PI / 180;
+    const rlon = lon * Math.PI / 180;
+    const rbearing = bearing * Math.PI / 180;
+    
+    // Calculate angular distance in radians
+    const angDist = distanceKm / R;
+    
+    // Calculate destination point
+    const newLat = Math.asin(
+        Math.sin(rlat) * Math.cos(angDist) +
+        Math.cos(rlat) * Math.sin(angDist) * Math.cos(rbearing)
+    );
+    
+    const newLon = rlon + Math.atan2(
+        Math.sin(rbearing) * Math.sin(angDist) * Math.cos(rlat),
+        Math.cos(angDist) - Math.sin(rlat) * Math.sin(newLat)
+    );
+    
+    // Convert back to degrees
+    return [newLat * 180 / Math.PI, ((newLon * 180 / Math.PI) + 540) % 360 - 180];
+}
+
+// Keep the original function for backward compatibility with other code
+function calculateDestination(lat, lon, distance, bearing) {
+    // This function now delegates to the new km-based function
+    // Convert the "distance" (which is in degrees) to approximate km
+    // 1 degree is roughly 111.32 km at the equator
+    const distanceKm = distance * 111.32;
+    return calculateDestinationFromKm(lat, lon, distanceKm, bearing);
+}
+
+// Fixed helper function to estimate cyclone speed in km/hour
+function estimateSpeed(pointIndex) {
+    // Default value if we can't calculate
+    let speedKmPerHour = 15; // Typical tropical cyclone speed is 5-15 km/h
+    
+    // If we have adjacent points, calculate actual speed
+    if (pointIndex > 0) {
+        const currentPoint = data[pointIndex];
+        const prevPoint = data[pointIndex - 1];
+        
+        // Calculate distance between points
+        const lat1 = prevPoint.latitude;
+        const lon1 = prevPoint.longitude;
+        const lat2 = currentPoint.latitude;
+        const lon2 = currentPoint.longitude;
+        
+        // Haversine formula for distance
+        const R = 6371; // Earth radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        
+        const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+            
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distance = R * c; // Distance in km
+        
+        // Use 3-hour intervals instead of 6-hour 
+        const hours = 3; // Changed from 6 to 3 for more accurate calculations
+        
+        // Calculate speed in km/hour directly
+        speedKmPerHour = distance / hours;
+        
+        // Ensure a minimum speed for visualization purposes
+        if (speedKmPerHour < 5) {
+            speedKmPerHour = 5;
+        }
+        
+        console.log(`Distance between points: ${distance.toFixed(2)} km, time: ${hours} hours`);
+    }
+    
+    console.log(`Estimated speed: ${speedKmPerHour.toFixed(2)} km/h`);
+    return speedKmPerHour;
+}
+
+// Helper function to calculate distance between two points in km
+function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+    // Haversine formula for distance
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+        
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c; // Distance in km
+    
+    return distance;
+}
 
 // Unit system: 'metric' or 'imperial'
 let unitSystem = 'metric';
@@ -1457,6 +1705,9 @@ function displayMarkers(fitBounds = true) {
     // Clear all storm visualizations
     clearAllStormVisualizations();
     
+    // Clear any isochrones when redisplaying markers
+    clearIsochrones();
+    
     // Add new markers
     data.forEach((point, index) => {
         // Determine hurricane category based on wind speed
@@ -1525,8 +1776,9 @@ function displayMarkers(fitBounds = true) {
                 // View mode: show dialog and popup
                 map.setView(e.latlng, map.getZoom());
                 
-                // Clear any existing visualizations
+                // Clear any existing visualizations and isochrones
                 clearAllStormVisualizations();
+                clearIsochrones();
                 greyOutOtherPoints(index);
                 displayStormAttributes(index);
                 
@@ -1545,6 +1797,10 @@ function displayMarkers(fitBounds = true) {
                 // Display storm attributes without dialog
                 clearAllStormVisualizations();
                 displayStormAttributes(index);
+                
+                // Clear any existing isochrones and show for this point
+                clearIsochrones();
+                showIsochrones(index);
                 
                 // Update selected point
                 selectedPoint = index;
@@ -1573,9 +1829,24 @@ function displayMarkers(fitBounds = true) {
                 
                 // Redraw track line during drag for continuous feedback
                 displayTrackLine();
+                
+                // Update isochrones if this is the selected point - but with debouncing for performance
+                if (selectedPointIndex === index) {
+                    if (isochroneUpdateTimeout) clearTimeout(isochroneUpdateTimeout);
+                    isochroneUpdateTimeout = setTimeout(() => {
+                        clearIsochrones();
+                        showIsochrones(index);
+                    }, 50); // Short debounce time for smoother feedback
+                }
             });
             
             marker.on('dragend', function(e) {
+                // Cancel any pending debounced updates
+                if (isochroneUpdateTimeout) {
+                    clearTimeout(isochroneUpdateTimeout);
+                    isochroneUpdateTimeout = null;
+                }
+                
                 updatePointLocation(index, e.target.getLatLng());
                 
                 // Check if marker is back at original position (within small threshold)
@@ -1591,6 +1862,12 @@ function displayMarkers(fitBounds = true) {
                         data[index].latitude = originalPos.lat;
                         data[index].longitude = originalPos.lng;
                         displayTrackLine();
+                        
+                        // Make sure to update isochrones for the snapped position
+                        if (selectedPointIndex === index) {
+                            clearIsochrones();
+                            showIsochrones(index);
+                        }
                     }
                 }
                 
@@ -1612,6 +1889,43 @@ function displayMarkers(fitBounds = true) {
     
     // Draw the track line connecting points
     displayTrackLine();
+    
+    // Add a global map click handler to clear isochrones when clicking away from markers
+    // Remove any existing click handler first to avoid duplicates
+    map.off('click');
+    map.on('click', function(e) {
+        // Only process if we're in edit mode
+        if (!editMode) return;
+        
+        // Check if the click was on a marker
+        let clickedOnMarker = false;
+        
+        // Get the pixel point of the click
+        const clickPoint = map.latLngToContainerPoint(e.latlng);
+        
+        // Check if we clicked near any marker
+        for (const marker of markers) {
+            const markerLatLng = marker.getLatLng();
+            const markerPoint = map.latLngToContainerPoint(markerLatLng);
+            
+            // Calculate pixel distance between click and marker
+            const dx = clickPoint.x - markerPoint.x;
+            const dy = clickPoint.y - markerPoint.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // If click is close to a marker (within 20 pixels), consider it a marker click
+            if (distance < 20) {
+                clickedOnMarker = true;
+                break;
+            }
+        }
+        
+        // If we didn't click on a marker, clear the isochrones
+        if (!clickedOnMarker) {
+            console.log("Clicked away from markers, clearing isochrones");
+            clearIsochrones();
+        }
+    });
 }
 
 // Create a ghost marker at the original position
@@ -1658,8 +1972,13 @@ function clearAllGhostMarkers() {
     });
 }
 
-// Select a point for editing
+// Select a point for editing - Updated to handle isochrones
 function selectPoint(index) {
+    // If we're selecting a different point, clear isochrones from previous point
+    if (selectedPoint !== index) {
+        clearIsochrones();
+    }
+    
     selectedPoint = index;
     
     // Highlight selected marker
@@ -1674,6 +1993,11 @@ function selectPoint(index) {
     
     // Grey out other points
     greyOutOtherPoints(index);
+    
+    // If in edit mode, show isochrones for selected point
+    if (editMode) {
+        showIsochrones(index);
+    }
 }
 
 // Update point location
@@ -1695,9 +2019,15 @@ function updatePointLocation(index, latlng) {
         clearStormVisualizations(index);
         displayStormAttributes(index);
     }
+    
+    // Update isochrones if this is the selected point
+    if (selectedPointIndex === index) {
+        clearIsochrones();
+        showIsochrones(index);
+    }
 }
 
-// Toggle edit mode - updated to preserve map view
+// Toggle edit mode - updated to preserve map view and clear isochrones
 function toggleEditMode() {
     editMode = !editMode;
     
@@ -1712,6 +2042,9 @@ function toggleEditMode() {
     
     // Clear all ghost markers when toggling edit mode
     clearAllGhostMarkers();
+    
+    // Clear any isochrones when toggling modes
+    clearIsochrones();
     
     // Update UI
     const modeStatus = document.getElementById('mode-status');

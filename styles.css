@@ -1985,3 +1985,30 @@ input[type="range"] {
     padding-left: 2px;
     letter-spacing: 0.02em;
 }
+
+.isochrone-label {
+    background-color: rgba(30, 30, 30, 0.9) !important;
+    border: 1px solid #aaa !important;
+    border-radius: 4px !important;
+    padding: 3px 6px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    text-align: center !important;
+    color: #fff !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+    pointer-events: none !important;
+    white-space: nowrap !important;
+    z-index: 1000 !important;
+}
+
+/* Style for polylines that represent isochrones */
+.isochrone-line {
+    stroke-dasharray: 5, 5 !important;
+    animation: dash 20s linear infinite !important;
+}
+
+@keyframes dash {
+    to {
+        stroke-dashoffset: 1000;
+    }
+}

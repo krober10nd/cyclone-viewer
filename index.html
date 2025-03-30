@@ -35,6 +35,20 @@
                         </div>
                     </div>
                     
+                    <!-- Shapefile Data Section -->
+                    <div class="file-upload shapefile-upload">
+                        <div class="upload-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                        </div>
+                        <label for="shapefile-input" class="file-label">Points</label>
+                        <input type="file" id="shapefile-input" accept=".shp,.dbf,.prj,.zip,.geojson,.json,.kml" class="hidden" multiple />
+                        <button id="shapefile-btn">Load</button>
+                    </div>
+                    
                     <div class="compact-controls">
                         <button id="toggle-edit-mode" class="btn">Edit Mode</button>
                         <span id="mode-status" class="view-mode">Position</span>
@@ -72,6 +86,8 @@
                 <div class="legend-item"><span class="color-dot r34-sw"></span> R34 SW</div>
                 <div class="legend-item"><span class="color-dot r34-nw"></span> R34 NW</div>
                 <div class="legend-item"><span class="color-dot roci"></span> ROCI</div>
+                <!-- Shapefile point legend entry -->
+                <div class="legend-item"><span class="legend-star"></span> Shapefile Points</div>
             </div>
             <!-- <div id="csv-format-info" class="floating-format-info">
                 <span class="format-title">CSV Format:</span> latitude,longitude,rmw,r34_ne,r34_se,r34_sw,r34_nw,roci
@@ -117,6 +133,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
     <script src="field-mapper.js"></script>
     <script src="popup-template.js"></script>
     <script src="app.js"></script>

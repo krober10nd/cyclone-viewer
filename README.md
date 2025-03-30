@@ -1,3 +1,6 @@
+# <p align="center">
+  <img src="docs/logo.png" alt="Cyclone Vortex" width="100"/>
+  </p>
 # Cyclone Track Editor/Visualizer
 
 A simple application for visualizing and editing tropical cyclone tracks with meteorological parameters.
@@ -51,7 +54,11 @@ You can also open the application directly in a web browser:
 - mslp (hPa, minimum central pressure)
 - rmw (m, radius of maximum winds)
 - r34_ne, r34_se, r34_sw, r34_nw (m, 34-knot wind radii in four quadrants)
-- roci (m, radius of outermost closed isobar)
+ - roci (m, radius of outermost closed isobar)
+
+#### Example Track Visualization
+
+![Example Track](docs/sample_track.png)
 
 ### Editing cyclone parameters
 1. Click on a storm position to view its details

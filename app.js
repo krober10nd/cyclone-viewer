@@ -1,3 +1,6 @@
+// Use global shp object loaded from CDN instead of import
+// The shpjs library is already included via <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
+
 // Global variables
 let map;
 let markers = [];
@@ -13,6 +16,11 @@ let isochroneUpdateTimeout = null; // Timeout for updating isochrones
 // Add these variables to your global scope
 let currentIsochrones = [];
 let selectedPointIndex = null;
+
+// Add global variables for shapefile handling
+let shapefilePoints = [];
+let shapefileLayerGroup = null;
+let shapefileCount = 0;
 
 // Function to display isochrones (+1h, +2h, +3h) when a point is clicked
 function showIsochrones(pointIndex) {
@@ -1055,9 +1063,7 @@ function makeWedgeEditable(wedge, pointIndex, attribute, startAngle, endAngle) {
 // Clear storm visualizations for a point
 function clearStormVisualizations(pointIndex) {
     if (stormCircles[pointIndex]) {
-        stormCircles[pointIndex].forEach(layer => {
-            map.removeLayer(layer);
-        });
+        stormCircles[pointIndex].forEach(layer => map.removeLayer(layer));
         stormCircles[pointIndex] = [];
     }
 }
@@ -2366,7 +2372,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn("Element 'point-select' not found - this might be expected if the selector is created dynamically later");
     }
     
-    // Enable drag and drop for CSV files
+    // Enable drag and drop for CSV files and shapefiles
     const dropZone = document.getElementById('drop-zone');
     if (dropZone) {
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -2394,19 +2400,46 @@ document.addEventListener('DOMContentLoaded', function() {
             dropZone.classList.remove('highlight');
         }
         
-        dropZone.addEventListener('drop', handleDrop, false);
-        
-        function handleDrop(e) {
+        // Enhanced unified drop handler for both CSV and shapefile types
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
             const dt = e.dataTransfer;
             const files = dt.files;
             
-            if (files.length > 0 && files[0].type === 'text/csv') {
-                document.getElementById('csv-file').files = files;
+            if (files.length === 0) return;
+            
+            // Check for shapefile types first
+            let hasShapefileTypes = false;
+            for (let i = 0; i < files.length; i++) {
+                const fileName = files[i].name.toLowerCase();
+                if (fileName.endsWith('.shp') || fileName.endsWith('.dbf') || 
+                    fileName.endsWith('.prj') || fileName.endsWith('.zip')) {
+                    hasShapefileTypes = true;
+                    break;
+                }
+            }
+            
+            // Handle file type accordingly
+            if (hasShapefileTypes) {
+                // Update loading count
+                shapefileCount = files.length;
+                updateLoadingCount(shapefileCount);
+                
+                // Process shapefile
+                loadShapefile(files);
+            } else if (files[0].type === 'text/csv' || files[0].name.toLowerCase().endsWith('.csv')) {
+                // Handle CSV file
+                document.getElementById('csv-file').files = dt.files;
                 loadCSVFile(files[0]);
             } else {
-                showNotification('Please drop a valid CSV file.', 'warning');
+                showNotification('Please drop a valid CSV or shapefile', 'warning');
             }
-        }
+            
+            // Remove highlight regardless of file type
+            dropZone.classList.remove('highlight');
+        });
     }
     
     // Add event handler for update-storm-btn if it exists
@@ -2478,6 +2511,32 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show feedback to user
             const scaleName = currentScale === 'saffir-simpson' ? 'Saffir-Simpson' : 'Australian BoM';
             showNotification(`Switched to ${scaleName} scale`, 'info', 1500);
+        });
+    }
+
+    // Set up shapefile input handling
+    const shapefileInput = document.getElementById('shapefile-input');
+    if (shapefileInput) {
+        shapefileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                // Update loading count
+                shapefileCount = this.files.length;
+                updateLoadingCount(shapefileCount);
+                
+                // Process files
+                loadShapefile(this.files);
+            }
+        });
+    }
+    
+    // Shapefile upload button
+    const shapefileBtn = document.getElementById('shapefile-btn');
+    if (shapefileBtn) {
+        shapefileBtn.addEventListener('click', function() {
+            const input = document.getElementById('shapefile-input');
+            if (input) {
+                input.click(); // Trigger file input dialog
+            }
         });
     }
 });
@@ -2626,5 +2685,585 @@ function nmToKmForDisplay(valueNM, decimals = 0) {
         return formatNumber(valueNM * NM_TO_KM, decimals) + ' km';
     } else {
         return formatNumber(valueNM * UNIT_CONVERSIONS.NM_TO_MILES, decimals) + ' mi';
+    }
+}
+
+// Create star icon for shapefile points
+function createStarIcon() {
+    return L.divIcon({
+        className: 'star-marker',
+        html: '★',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+}
+
+// Load and process shapefile - Updated with improved format handling
+async function loadShapefile(files) {
+    try {
+        // Show loading indicator
+        const uploadElement = document.querySelector('.shapefile-upload');
+        uploadElement.classList.add('loading');
+        
+        // Reset counter if no count indicator exists
+        if (!document.querySelector('.loading-count')) {
+            shapefileCount = 0;
+        }
+        
+        // Show loading notification
+        showNotification('Processing spatial data...', 'info');
+        
+        // Find files by extension
+        let shpFile = null;
+        let dbfFile = null;
+        let prjFile = null;
+        let zipFile = null;
+        let geoJsonFile = null;
+        let kmlFile = null;
+        
+        // Check for various file types
+        for (const file of files) {
+            const fileName = file.name.toLowerCase();
+            console.log("Processing file:", fileName);
+            
+            if (fileName.endsWith('.shp')) {
+                shpFile = file;
+            } else if (fileName.endsWith('.dbf')) {
+                dbfFile = file;
+            } else if (fileName.endsWith('.prj')) {
+                prjFile = file;
+            } else if (fileName.endsWith('.zip')) {
+                zipFile = file;
+            } else if (fileName.endsWith('.geojson') || fileName.endsWith('.json')) {
+                geoJsonFile = file;
+            } else if (fileName.endsWith('.kml')) {
+                kmlFile = file;
+            }
+        }
+        
+        let geojson = null;
+        
+        // Process based on available file types
+        if (geoJsonFile) {
+            // Handle GeoJSON directly
+            console.log("Processing GeoJSON file:", geoJsonFile.name);
+            const jsonText = await readFileAsText(geoJsonFile);
+            try {
+                geojson = JSON.parse(jsonText);
+                console.log("Successfully parsed GeoJSON");
+            } catch (e) {
+                console.error("Error parsing GeoJSON:", e);
+                throw new Error("Invalid GeoJSON file format");
+            }
+        } 
+        else if (kmlFile) {
+            // For KML files - convert to GeoJSON using a simple approach
+            // Note: This is a simplified KML parser that works for basic point data
+            // For complex KML, a proper library would be better
+            console.log("Processing KML file:", kmlFile.name);
+            const kmlText = await readFileAsText(kmlFile);
+            geojson = kmlToGeoJSON(kmlText);
+        }
+        else if (zipFile) {
+            // Handle zip file containing shapefile
+            console.log("Processing ZIP file:", zipFile.name);
+            const zipBuffer = await readFileAsArrayBuffer(zipFile);
+            geojson = await shp.parseZip(zipBuffer);
+        } 
+        else if (shpFile) {
+            // Handle individual shp file, optionally with dbf
+            console.log("Processing SHP file:", shpFile.name);
+            const shpBuffer = await readFileAsArrayBuffer(shpFile);
+            geojson = await shp.parseShp(shpBuffer);
+            
+            // If we have a DBF file, add attributes to the features
+            if (dbfFile) {
+                console.log("Processing DBF file:", dbfFile.name);
+                const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
+                const dbfData = await shp.parseDbf(dbfBuffer);
+                
+                console.log("DBF data structure:", 
+                    dbfData && typeof dbfData === 'object' ? Object.keys(dbfData) : 'unexpected format');
+                
+                // Attempt to merge DBF attributes with SHP geometry
+                if (geojson.features && dbfData.features) {
+                    // Standard case
+                    geojson.features.forEach((feature, i) => {
+                        if (i < dbfData.features.length) {
+                            feature.properties = dbfData.features[i].properties;
+                        }
+                    });
+                } else if (dbfData && Array.isArray(geojson)) {
+                    // Special case: SHP is array but DBF has different structure
+                    console.log("Special case: SHP is array but DBF has different structure");
+                    
+                    // If DBF has records directly
+                    if (dbfData.records && Array.isArray(dbfData.records)) {
+                        geojson.forEach((feature, i) => {
+                            if (i < dbfData.records.length) {
+                                if (!feature.properties) feature.properties = {};
+                                Object.assign(feature.properties, dbfData.records[i]);
+                            }
+                        });
+                    }
+                }
+            }
+            
+            // If we have a PRJ file, we could use it for reprojection
+            if (prjFile) {
+                // Just read and log for now - projection is usually handled by Leaflet
+                const prjText = await readFileAsText(prjFile);
+                console.log("Projection information detected");
+            }
+        } else {
+            throw new Error("No compatible spatial files found. Please upload a shapefile (.shp, .zip), GeoJSON (.geojson, .json), or KML (.kml) file.");
+        }
+        
+        // Debug the output structure
+        if (geojson) {
+            console.log("GeoJSON structure type:", typeof geojson);
+            if (Array.isArray(geojson)) {
+                console.log("GeoJSON is an array with", geojson.length, "items");
+            } else if (typeof geojson === 'object') {
+                console.log("GeoJSON object keys:", Object.keys(geojson));
+            }
+        } else {
+            throw new Error("Failed to parse spatial data - no valid GeoJSON structure created");
+        }
+        
+        // Process and display the GeoJSON
+        displayShapefilePoints(geojson);
+        
+    } catch (error) {
+        console.error("Error processing spatial data:", error);
+        showNotification(`Error: ${error.message}`, 'error');
+    } finally {
+        // Hide loading indicator
+        document.querySelector('.shapefile-upload').classList.remove('loading');
+        
+        // Remove loading count if it exists
+        const countElement = document.querySelector('.loading-count');
+        if (countElement) {
+            countElement.remove();
+        }
+    }
+}
+
+// Simple KML to GeoJSON converter for point data
+function kmlToGeoJSON(kmlString) {
+    try {
+        // Create a DOM parser to process the KML
+        const parser = new DOMParser();
+        const kml = parser.parseFromString(kmlString, 'text/xml');
+        
+        // Check if it's a valid KML file
+        if (kml.documentElement.nodeName === "parsererror") {
+            throw new Error("Invalid KML file");
+        }
+        
+        // Create a GeoJSON FeatureCollection
+        const geojson = {
+            type: "FeatureCollection",
+            features: []
+        };
+        
+        // Process placemarks (points in KML)
+        const placemarks = kml.getElementsByTagName('Placemark');
+        console.log(`Found ${placemarks.length} placemarks in KML`);
+        
+        for (let i = 0; i < placemarks.length; i++) {
+            const placemark = placemarks[i];
+            
+            // Get name and description
+            const name = placemark.querySelector('name')?.textContent || `Point ${i+1}`;
+            const description = placemark.querySelector('description')?.textContent || '';
+            
+            // Get coordinates from Point geometry
+            const point = placemark.querySelector('Point');
+            if (point) {
+                const coordinatesText = point.querySelector('coordinates')?.textContent;
+                if (coordinatesText) {
+                    // KML format is lon,lat,alt - we need to parse and convert to [lon,lat]
+                    const parts = coordinatesText.trim().split(',');
+                    if (parts.length >= 2) {
+                        const lon = parseFloat(parts[0]);
+                        const lat = parseFloat(parts[1]);
+                        
+                        // Create a GeoJSON feature for this point
+                        const feature = {
+                            type: "Feature",
+                            geometry: {
+                                type: "Point",
+                                coordinates: [lon, lat]
+                            },
+                            properties: {
+                                name: name,
+                                description: description
+                            }
+                        };
+                        
+                        // Add any extended data as properties
+                        const extendedData = placemark.querySelector('ExtendedData');
+                        if (extendedData) {
+                            const dataElements = extendedData.querySelectorAll('Data');
+                            dataElements.forEach(data => {
+                                const key = data.getAttribute('name');
+                                const value = data.querySelector('value')?.textContent;
+                                if (key && value) {
+                                    feature.properties[key] = value;
+                                }
+                            });
+                        }
+                        
+                        geojson.features.push(feature);
+                    }
+                }
+            }
+        }
+        
+        console.log(`Converted ${geojson.features.length} KML points to GeoJSON`);
+        return geojson;
+    } catch (error) {
+        console.error("Error converting KML to GeoJSON:", error);
+        throw new Error("Failed to parse KML file: " + error.message);
+    }
+}
+
+// Read file as array buffer (for binary files)
+function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+// Read file as text (for projection files)
+function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsText(file);
+    });
+}
+
+// Display shapefile points on the map - improved version
+function displayShapefilePoints(geojson) {
+    // Clear existing shapefile points first
+    clearShapefilePoints();
+    
+    // Create layer group if it doesn't exist already
+    if (!shapefileLayerGroup) {
+        shapefileLayerGroup = L.layerGroup().addTo(map);
+    }
+    
+    // Create star icon once to reuse
+    const starIcon = createStarIcon();
+    
+    // Count of points added
+    let pointCount = 0;
+    
+    // Enhanced function to process a feature collection or array of features
+    function processFeatureCollection(features) {
+        console.log("Processing", features.length, "features");
+        
+        features.forEach((feature, index) => {
+            // Skip if no geometry at all
+            if (!feature || !feature.geometry) {
+                console.log(`Feature ${index} has no geometry`);
+                
+                // Special case: if feature has coordinates directly but no geometry
+                if (feature.coordinates && Array.isArray(feature.coordinates)) {
+                    console.log(`Feature ${index} has direct coordinates`);
+                    addPointToMap(feature.coordinates, feature.properties || {});
+                    pointCount++;
+                    return;
+                }
+                
+                return;
+            }
+            
+            // Get type, handling both standard GeoJSON and direct properties
+            const geomType = feature.geometry.type || 
+                            (feature.type === 'Feature' ? null : feature.type);
+            
+            console.log(`Feature ${index} type:`, geomType);
+            
+            // Process based on geometry type
+            if (geomType === 'Point') {
+                // Get coordinates, handling both standard GeoJSON and direct properties
+                const coords = feature.geometry.coordinates || feature.coordinates;
+                if (coords && Array.isArray(coords)) {
+                    addPointToMap(coords, feature.properties || {});
+                    pointCount++;
+                } else {
+                    console.log(`Feature ${index} has invalid coordinates:`, coords);
+                }
+            } 
+            else if (geomType === 'MultiPoint') {
+                const coords = feature.geometry.coordinates || feature.coordinates;
+                if (coords && Array.isArray(coords)) {
+                    coords.forEach(coord => {
+                        if (coord && Array.isArray(coord)) {
+                            addPointToMap(coord, feature.properties || {});
+                            pointCount++;
+                        }
+                    });
+                }
+            }
+            // For non-point geometries, check if they have a centroid property that can be displayed
+            else if (feature.properties && (feature.properties.centroid_x || feature.properties.x_cent)) {
+                const x = feature.properties.centroid_x || feature.properties.x_cent;
+                const y = feature.properties.centroid_y || feature.properties.y_cent;
+                if (x !== undefined && y !== undefined) {
+                    addPointToMap([x, y], feature.properties);
+                    pointCount++;
+                }
+            }
+        });
+    }
+    
+    // Helper function to add a point to the map with coordinate validation
+    function addPointToMap(coords, properties) {
+        // Sanity check the coordinates
+        if (!coords || !Array.isArray(coords) || coords.length < 2) {
+            console.log("Invalid coordinates:", coords);
+            return;
+        }
+        
+        // Check which coordinate is likely latitude vs longitude
+        let lat, lon;
+        
+        // Standard GeoJSON is [longitude, latitude], but some files might be [latitude, longitude]
+        if (coords[0] >= -180 && coords[0] <= 180 && coords[1] >= -90 && coords[1] <= 90) {
+            // Likely [longitude, latitude] format (GeoJSON standard)
+            lon = coords[0];
+            lat = coords[1];
+        } else if (coords[1] >= -180 && coords[1] <= 180 && coords[0] >= -90 && coords[0] <= 90) {
+            // Likely [latitude, longitude] format (non-standard)
+            lat = coords[0];
+            lon = coords[1];
+        } else {
+            // If still not clear, assume GeoJSON standard [longitude, latitude]
+            lon = coords[0];
+            lat = coords[1];
+            
+            // Log this case to help debug
+            console.log("Unusual coordinates:", coords, "- assuming [lon, lat]");
+        }
+        
+        // Extra check for valid latitude/longitude (reject extreme values)
+        if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+            console.log("Coordinates out of range - skipping:", coords);
+            return;
+        }
+        
+        try {
+            // Create marker with star icon
+            const marker = L.marker([lat, lon], {
+                icon: starIcon,
+                title: getPointTitle(properties)
+            });
+            
+            // Add popup with properties
+            if (properties) {
+                marker.bindPopup(createShapefilePopup(properties), {
+                    className: 'shapefile-popup',
+                    maxWidth: 300
+                });
+            }
+            
+            // Add to layer group
+            marker.addTo(shapefileLayerGroup);
+            
+            // Store reference
+            shapefilePoints.push(marker);
+        } catch (e) {
+            console.error("Error adding marker at", [lat, lon], ":", e.message);
+        }
+    }
+    
+    // Get a title for the point from properties
+    function getPointTitle(properties) {
+        if (!properties) return "Shapefile Point";
+        
+        // Expanded list of common name fields
+        const nameFields = [
+            'name', 'NAME', 'Name', 'title', 'TITLE', 'Title', 'id', 'ID', 
+            'label', 'LABEL', 'station', 'STATION', 'site', 'SITE', 
+            'description', 'DESC', 'identifier', 'loc', 'location'
+        ];
+        
+        for (const field of nameFields) {
+            if (properties[field]) return properties[field];
+        }
+        
+        // Fallback to first property
+        const firstKey = Object.keys(properties)[0];
+        if (firstKey) return `${firstKey}: ${properties[firstKey]}`;
+        
+        return "Shapefile Point";
+    }
+    
+    // Process various GeoJSON structure possibilities
+    console.log("Starting to process GeoJSON structure");
+    
+    // Case 1: Standard GeoJSON FeatureCollection
+    if (geojson.type === 'FeatureCollection' && Array.isArray(geojson.features)) {
+        console.log("Processing standard FeatureCollection with", geojson.features.length, "features");
+        processFeatureCollection(geojson.features);
+    } 
+    // Case 2: Array of GeoJSON Feature objects
+    else if (Array.isArray(geojson) && geojson.length > 0) {
+        console.log("Processing array of", geojson.length, "items");
+        
+        // Check if the items are feature collections
+        if (geojson[0].type === 'FeatureCollection' && Array.isArray(geojson[0].features)) {
+            geojson.forEach((collection, i) => {
+                console.log(`Processing collection ${i} with`, 
+                    collection.features ? collection.features.length : 0, "features");
+                if (collection.features) {
+                    processFeatureCollection(collection.features);
+                }
+            });
+        }
+        // Check if the items are direct features with geometries
+        else if (geojson[0].geometry || geojson[0].type === 'Feature') {
+            console.log("Processing array of Feature objects");
+            processFeatureCollection(geojson);
+        }
+        // Check if array contains direct geometry objects
+        else if (geojson[0].type === 'Point' || geojson[0].type === 'MultiPoint') {
+            console.log("Processing array of direct geometry objects");
+            processFeatureCollection(geojson);
+        }
+        // Last resort - try to add any array items that have coordinates
+        else {
+            console.log("Treating array items as potential points");
+            geojson.forEach((item, i) => {
+                if (item.coordinates && Array.isArray(item.coordinates)) {
+                    addPointToMap(item.coordinates, item.properties || {});
+                    pointCount++;
+                } else if (Array.isArray(item) && item.length >= 2) {
+                    // The item itself might be a coordinate pair
+                    addPointToMap(item, {});
+                    pointCount++;
+                }
+            });
+        }
+    }
+    // Case 3: Single GeoJSON Feature 
+    else if (geojson.type === 'Feature' && geojson.geometry) {
+        console.log("Processing single Feature");
+        processFeatureCollection([geojson]);
+    }
+    // Case 4: Direct geometry object
+    else if (geojson.type === 'Point' || geojson.type === 'MultiPoint') {
+        console.log("Processing direct geometry object");
+        processFeatureCollection([geojson]);
+    }
+    // Case 5: Unknown structure but possibly with coordinates
+    else if (geojson.coordinates && Array.isArray(geojson.coordinates)) {
+        console.log("Processing object with direct coordinates");
+        addPointToMap(geojson.coordinates, geojson.properties || {});
+        pointCount++;
+    }
+    else {
+        console.log("Unknown GeoJSON structure:", Object.keys(geojson));
+    }
+    
+    console.log("Finished processing - found", pointCount, "points");
+    
+    // If points were added, fit the map to include them
+    if (pointCount > 0) {
+        // Create a group with both cyclone markers and shapefile points for bounds
+        const allVisibleLayers = [];
+        
+        // Add shapefile points first so they're not hidden behind cyclone markers
+        if (shapefilePoints.length > 0) {
+            allVisibleLayers.push(...shapefilePoints);
+        }
+        
+        // Add marker layers if they exist
+        if (markers.length > 0) {
+            allVisibleLayers.push(...markers);
+        }
+        
+        // If we have visible layers, fit bounds
+        if (allVisibleLayers.length > 0) {
+            const group = L.featureGroup(allVisibleLayers);
+            map.fitBounds(group.getBounds(), {
+                padding: [50, 50] // Add padding around bounds
+            });
+        }
+        
+        // Show success notification
+        showNotification(`Successfully loaded ${pointCount} shapefile points`, 'success', 3000);
+    } else {
+        showNotification('No point features found in shapefile - check console for details', 'warning');
+    }
+}
+
+// Create popup content for shapefile points
+function createShapefilePopup(properties) {
+    let content = `<div class="popup-content">
+        <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
+            <strong>Shapefile Point</strong>
+        </div>
+        <div class="popup-metrics">`;
+    
+    // Display all properties in a nicely formatted way
+    for (const [key, value] of Object.entries(properties)) {
+        if (value !== null && value !== undefined) {
+            // Format different types of values appropriately
+            let displayValue = value;
+            if (typeof value === 'number') {
+                // Format numbers with appropriate precision
+                displayValue = formatNumber(value, 
+                    Number.isInteger(value) ? 0 : 2);
+            } else if (typeof value === 'string' && value.length > 50) {
+                // Truncate long strings
+                displayValue = value.substring(0, 47) + '...';
+            }
+            
+            content += `
+            <div class="metric">
+                <strong class="var-name">${key}:</strong> 
+                <span class="var-value">${displayValue}</span>
+            </div>`;
+        }
+    }
+    
+    content += `</div></div>`;
+    return content;
+}
+
+// Clear shapefile points from the map
+function clearShapefilePoints() {
+    // Remove all points from the map
+    if (shapefileLayerGroup) {
+        shapefileLayerGroup.clearLayers();
+    }
+    
+    // Clear array of references
+    shapefilePoints = [];
+}
+
+// Update loading count indicator
+function updateLoadingCount(count) {
+    // Remove existing count element
+    const existingCount = document.querySelector('.loading-count');
+    if (existingCount) {
+        existingCount.remove();
+    }
+    
+    if (count > 0) {
+        // Create new count element
+        const countElement = document.createElement('div');
+        countElement.className = 'loading-count';
+        countElement.textContent = count;
+        document.querySelector('.shapefile-upload').appendChild(countElement);
     }
 }

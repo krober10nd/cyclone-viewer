@@ -2521,6 +2521,15 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleEditModeBtn.addEventListener('click', toggleEditMode);
     }
     
+    // Add event listener for toggle-isochrones button
+    const toggleIsochronesBtn = document.getElementById('toggle-isochrones');
+    if (toggleIsochronesBtn) {
+        toggleIsochronesBtn.addEventListener('click', toggleIsochrones);
+        console.log("Attached event listener to isochrones toggle button");
+    } else {
+        console.warn("Could not find toggle-isochrones button");
+    }
+    
     // Update point button
     const updatePointBtn = document.getElementById('update-point-btn');
     if (updatePointBtn) {

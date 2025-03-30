@@ -90,7 +90,8 @@ function formatPopupContent(point, index) {
     // Get the hurricane category to style the popup
     const category = getHurricaneCategory(point.wind_speed);
     
-    let content = `<div class="popup-content" style="border-color:${category.color}">`;
+    // Increased max-height from 500px to 625px (25% taller)
+    let content = `<div class="popup-content" style="border-color:${category.color}; max-height: 625px;">`;
     
     // Header section with same color as border but improved text contrast
     content += `<div class="popup-header" style="background-color:${category.color}40; border-color:${category.color}">
@@ -186,8 +187,8 @@ L.Marker.prototype.bindPopup = function(content, options) {
                 closeButton: true,
                 maxWidth: 320, // Increased from default to ensure wider popup
                 minWidth: 300, // Set minimum width to prevent narrow popups
-                minHeight: 350, // Increased from 150px to match CSS value
-                maxHeight: 500 // Added to match CSS max-height value
+                minHeight: 450, // Increased from 350px to show more content
+                maxHeight: 650 // Increased from 500px to show more content
             }, options);
             
             // Add CSS for minimum height if not already in document
@@ -196,8 +197,8 @@ L.Marker.prototype.bindPopup = function(content, options) {
                 style.id = 'popup-min-height-style';
                 style.textContent = `
                     .leaflet-popup-content {
-                        min-height: 350px; /* Match the minHeight option */
-                        max-height: 500px; /* Match the maxHeight option */
+                        min-height: 450px; /* Increased from 350px */
+                        max-height: 650px; /* Increased from 500px */
                         overflow-y: auto;
                         overflow-x: hidden;
                         padding: 0;
@@ -205,7 +206,7 @@ L.Marker.prototype.bindPopup = function(content, options) {
                     
                     /* Ensure popup container is tall enough */
                     .leaflet-popup {
-                        min-height: 350px;
+                        min-height: 450px; /* Increased from 350px */
                     }
                     
                     /* Improve scrolling behavior */
@@ -218,7 +219,7 @@ L.Marker.prototype.bindPopup = function(content, options) {
                     /* Ensure popup content fills available space */
                     .popup-content {
                         height: auto;
-                        min-height: 350px;
+                        min-height: 450px; /* Increased from 350px */
                     }
                 `;
                 document.head.appendChild(style);
@@ -266,11 +267,49 @@ function positionPopupToRight(marker, popup) {
     // Set the popup position
     popup.setLatLng(rightLatLng);
     
+    // After positioning, ensure the popup doesn't get cut off at the bottom of the screen
+    const popupEl = popup._container;
+    if (popupEl) {
+        const popupHeight = popupEl.offsetHeight;
+        const mapHeight = map.getContainer().offsetHeight;
+        const popupTop = popupEl.offsetTop;
+        
+        // If popup would extend below the map, adjust its position
+        if (popupTop + popupHeight > mapHeight - 20) {
+            const newTop = Math.max(20, mapHeight - 20 - popupHeight);
+            popupEl.style.top = newTop + 'px';
+        }
+    }
+    
     return popup;
 }
 
 // Add global function for repositioning popups
 window.positionPopupToRight = positionPopupToRight;
+
+// Add a style tag to ensure popups have enough room
+const popupStyle = document.createElement('style');
+popupStyle.textContent = `
+    .leaflet-popup-content {
+        margin: 8px;
+        overflow-y: auto;
+    }
+    
+    .category-popup .leaflet-popup-content-wrapper {
+        max-height: 95vh; /* Increased from 80vh */
+    }
+    
+    .popup-content {
+        max-height: 90vh; /* Increased from 70vh */
+        overflow-y: auto;
+    }
+    
+    /* Ensure metric sections don't get squished */
+    .popup-metrics .metric {
+        margin-bottom: 6px;
+    }
+`;
+document.head.appendChild(popupStyle);
 
 // Make this function globally available
 window.formatPopupContent = formatPopupContent;

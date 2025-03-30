@@ -217,6 +217,14 @@ h3 {
     flex-shrink: 0;
 }
 
+/* Add matching styling for shapefile button */
+#shapefile-btn {
+    margin: 0;
+    padding: 2px 6px;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
 #update-point-btn {
     background-color: var(--success);
 }
@@ -239,6 +247,28 @@ h3 {
     margin: 0;
     padding: 3px 8px;
     font-size: 12px;
+}
+
+/* Isochrone toggle button */
+.btn-isochrones {
+    background-color: #4a6fa5; /* Blueish color to match isochrones */
+    padding: 3px 8px;
+    font-size: 11px;
+    display: none; /* Hidden by default, shown only in edit mode */
+}
+
+.btn-isochrones:hover {
+    background-color: #3a5a8a;
+}
+
+.btn-isochrones.disabled {
+    background-color: #555555;
+    color: #aaaaaa;
+    opacity: 0.8;
+}
+
+.btn-isochrones.disabled:hover {
+    background-color: #666666;
 }
 
 /* Controls */

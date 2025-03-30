@@ -22,7 +22,7 @@ let shapefilePoints = [];
 let shapefileLayerGroup = null;
 let shapefileCount = 0;
 
-// Function to display isochrones (+1h, +2h, +3h) when a point is clicked
+// Function to display isochrones (+1h, +2h, +3h, ..., +6h) when a point is clicked
 function showIsochrones(pointIndex) {
     // Clear any existing isochrones
     clearIsochrones();
@@ -63,11 +63,14 @@ function showIsochrones(pointIndex) {
     const speedKmPerHour = estimateSpeed(pointIndex);
     console.log(`Calculated trajectory: ${trajectory.toFixed(1)}° with speed ${speedKmPerHour.toFixed(2)} km/h`);
     
-    // Define colors for each hour isochrone - using more distinguishable colors
+    // Define colors for each hour isochrone - extended to 6 hours with a smooth progression
     const isochroneColors = [
         'rgba(100, 220, 255, 0.8)',  // +1h - Light blue
-        'rgba(255, 200, 0, 0.8)',    // +2h - Orange/gold
-        'rgba(255, 50, 50, 0.8)'     // +3h - Red
+        'rgba(150, 220, 190, 0.8)',  // +2h - Teal blue
+        'rgba(200, 220, 100, 0.8)',  // +3h - Yellow green
+        'rgba(255, 200, 0, 0.8)',    // +4h - Orange/gold
+        'rgba(255, 150, 50, 0.8)',   // +5h - Orange
+        'rgba(255, 50, 50, 0.8)'     // +6h - Red
     ];
     
     // For debugging, show where the next point would be if the data follows the expected pattern
@@ -81,8 +84,8 @@ function showIsochrones(pointIndex) {
         console.log(`Next point should be approximately at +${(distanceToNext/speedKmPerHour).toFixed(1)} hours`);
     }
     
-    // Draw isochrones for +1h, +2h, +3h with more spacing between them
-    [1, 2, 3].forEach((hours, index) => {
+    // Draw isochrones for +1h through +6h
+    [1, 2, 3, 4, 5, 6].forEach((hours, index) => {
         const isochronePoints = [];
         
         // Create a fan of points at ±90 degrees from trajectory
@@ -103,7 +106,7 @@ function showIsochrones(pointIndex) {
         // Create a polyline for this isochrone with different color and width
         const polyline = L.polyline(isochronePoints, {
             color: isochroneColors[index],
-            weight: 1.5 + (hours * 0.5), // Thicker lines for later hours
+            weight: 1.5 + (hours * 0.3), // Thicker lines for later hours, more gradual progression
             dashArray: '5, 5',
             opacity: 0.9,
             smoothFactor: 2,
@@ -115,8 +118,9 @@ function showIsochrones(pointIndex) {
         const midPoint = isochronePoints[midPointIndex];
         
         // Calculate a position for the label that's slightly offset from the line
+        // Use greater offset for later hours to prevent overlap
         const labelAngle = trajectory; // Use the trajectory angle for offset
-        const labelOffsetKm = 5; // Small offset in km
+        const labelOffsetKm = 5 + (hours > 3 ? hours - 3 : 0); // Increase offset for hours 4-6
         const labelPoint = calculateDestinationFromKm(
             midPoint[0], midPoint[1], 
             labelOffsetKm, 
@@ -200,7 +204,53 @@ function calculateDestination(lat, lon, distance, bearing) {
     return calculateDestinationFromKm(lat, lon, distanceKm, bearing);
 }
 
-// Fixed helper function to estimate cyclone speed in km/hour
+// Helper function to get timestamp from a track point
+function getPointTimestamp(point) {
+    // Check if we have the necessary UTC time fields
+    if (point.year_utc !== undefined && 
+        point.month_utc !== undefined && 
+        point.day_utc !== undefined) {
+        
+        // Get hour and minute (default to 0 if not present)
+        const hour = point.hour_utc !== undefined ? point.hour_utc : 0;
+        const minute = point.minute_utc !== undefined ? point.minute_utc : 0;
+        
+        // Create Date object (months are 0-indexed in JavaScript)
+        return new Date(Date.UTC(
+            point.year_utc,
+            point.month_utc - 1,
+            point.day_utc,
+            hour,
+            minute
+        ));
+    }
+    
+    return null; // Return null if time data not available
+}
+
+// Calculate time difference between two points in hours
+function getTimeDeltaHours(point1, point2) {
+    const timestamp1 = getPointTimestamp(point1);
+    const timestamp2 = getPointTimestamp(point2);
+    
+    if (timestamp1 && timestamp2) {
+        // Calculate time difference in milliseconds and convert to hours
+        const diffMs = Math.abs(timestamp2 - timestamp1);
+        const diffHours = diffMs / (1000 * 60 * 60);
+        
+        // For debugging
+        console.log(`Time difference: ${diffHours.toFixed(2)} hours`);
+        
+        // Ensure a minimum time difference to avoid division by zero
+        return Math.max(diffHours, 0.5);
+    }
+    
+    // Fall back to default if timestamps not available
+    console.log("No timestamp data available, using default 3-hour interval");
+    return 3.0; // Default 3-hour interval
+}
+
+// Updated helper function to estimate cyclone speed in km/hour using actual time deltas
 function estimateSpeed(pointIndex) {
     // Default value if we can't calculate
     let speedKmPerHour = 15; // Typical tropical cyclone speed is 5-15 km/h
@@ -211,26 +261,13 @@ function estimateSpeed(pointIndex) {
         const prevPoint = data[pointIndex - 1];
         
         // Calculate distance between points
-        const lat1 = prevPoint.latitude;
-        const lon1 = prevPoint.longitude;
-        const lat2 = currentPoint.latitude;
-        const lon2 = currentPoint.longitude;
+        const distance = calculateDistanceKm(
+            prevPoint.latitude, prevPoint.longitude,
+            currentPoint.latitude, currentPoint.longitude
+        );
         
-        // Haversine formula for distance
-        const R = 6371; // Earth radius in km
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        
-        const a = 
-            Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-            
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        const distance = R * c; // Distance in km
-        
-        // Use 3-hour intervals instead of 6-hour 
-        const hours = 3; // Changed from 6 to 3 for more accurate calculations
+        // Calculate actual time difference in hours
+        const hours = getTimeDeltaHours(prevPoint, currentPoint);
         
         // Calculate speed in km/hour directly
         speedKmPerHour = distance / hours;
@@ -240,11 +277,111 @@ function estimateSpeed(pointIndex) {
             speedKmPerHour = 5;
         }
         
-        console.log(`Distance between points: ${distance.toFixed(2)} km, time: ${hours} hours`);
+        console.log(`Distance between points: ${distance.toFixed(2)} km, time: ${hours.toFixed(2)} hours`);
+    } else if (pointIndex < data.length - 1) {
+        // If it's the first point, estimate using the next point instead
+        const currentPoint = data[pointIndex];
+        const nextPoint = data[pointIndex + 1];
+        
+        // Calculate distance to next point
+        const distance = calculateDistanceKm(
+            currentPoint.latitude, currentPoint.longitude,
+            nextPoint.latitude, nextPoint.longitude
+        );
+        
+        // Calculate actual time difference in hours
+        const hours = getTimeDeltaHours(currentPoint, nextPoint);
+        
+        // Calculate speed in km/hour
+        speedKmPerHour = distance / hours;
+        
+        // Ensure a minimum speed
+        if (speedKmPerHour < 5) {
+            speedKmPerHour = 5;
+        }
+        
+        console.log(`First point - using next point. Distance: ${distance.toFixed(2)} km, time: ${hours.toFixed(2)} hours`);
     }
     
     console.log(`Estimated speed: ${speedKmPerHour.toFixed(2)} km/h`);
     return speedKmPerHour;
+}
+
+// Updated function to calculate translational speed using actual time deltas
+function getTcspd(index) {
+    // Default to a reasonable speed if calculation isn't possible
+    let tcspd = 0;
+    
+    try {
+        if (index > 0 && index < data.length - 1) {
+            // Middle point - average speeds from previous and next
+            const prevDistance = calculateDistanceKm(
+                data[index-1].latitude, data[index-1].longitude,
+                data[index].latitude, data[index].longitude
+            );
+            
+            const nextDistance = calculateDistanceKm(
+                data[index].latitude, data[index].longitude,
+                data[index+1].latitude, data[index+1].longitude
+            );
+            
+            // Get actual time intervals
+            const prevHours = getTimeDeltaHours(data[index-1], data[index]);
+            const nextHours = getTimeDeltaHours(data[index], data[index+1]);
+            
+            // Calculate speeds for each segment
+            const prevSpeedKmh = prevDistance / prevHours;
+            const nextSpeedKmh = nextDistance / nextHours;
+            
+            // Average the speeds
+            const avgSpeedKmh = (prevSpeedKmh + nextSpeedKmh) / 2;
+            
+            // Convert to m/s (1 km/h = 1000/3600 m/s)
+            tcspd = avgSpeedKmh * (1000 / 3600);
+            
+            console.log(`Point ${index} (middle): Tcspd = ${tcspd.toFixed(2)} m/s (${avgSpeedKmh.toFixed(2)} km/h)`);
+        } 
+        else if (index === 0 && data.length > 1) {
+            // First point - use speed to next point
+            const distance = calculateDistanceKm(
+                data[0].latitude, data[0].longitude,
+                data[1].latitude, data[1].longitude
+            );
+            
+            // Get actual time interval
+            const hours = getTimeDeltaHours(data[0], data[1]);
+            
+            // Convert to speed in km/h
+            const speedKmh = distance / hours;
+            
+            // Convert to m/s
+            tcspd = speedKmh * (1000 / 3600);
+            
+            console.log(`Point ${index} (first): Tcspd = ${tcspd.toFixed(2)} m/s (${speedKmh.toFixed(2)} km/h)`);
+        }
+        else if (index === data.length - 1 && data.length > 1) {
+            // Last point - use speed from previous point
+            const distance = calculateDistanceKm(
+                data[index-1].latitude, data[index-1].longitude,
+                data[index].latitude, data[index].longitude
+            );
+            
+            // Get actual time interval
+            const hours = getTimeDeltaHours(data[index-1], data[index]);
+            
+            // Convert to speed in km/h
+            const speedKmh = distance / hours;
+            
+            // Convert to m/s
+            tcspd = speedKmh * (1000 / 3600);
+            
+            console.log(`Point ${index} (last): Tcspd = ${tcspd.toFixed(2)} m/s (${speedKmh.toFixed(2)} km/h)`);
+        }
+    } catch (error) {
+        console.error(`Error calculating Tcspd for point ${index}:`, error);
+    }
+    
+    return tcspd;
 }
 
 // Helper function to calculate distance between two points in km
@@ -2893,10 +3030,6 @@ function kmlToGeoJSON(kmlString) {
                         const feature = {
                             type: "Feature",
                             geometry: {
-                                type: "Point",
-                                coordinates: [lon, lat]
-                            },
-                            properties: {
                                 name: name,
                                 description: description
                             }

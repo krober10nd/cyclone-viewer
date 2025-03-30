@@ -22,6 +22,9 @@ let shapefilePoints = [];
 let shapefileLayerGroup = null;
 let shapefileCount = 0;
 
+// Add global variable for isochrones toggle state
+let isochronesEnabled = true; // Default to enabled
+
 // Function to display isochrones (+1h, +2h, +3h, ..., +6h) when a point is clicked
 function showIsochrones(pointIndex) {
     // Clear any existing isochrones
@@ -150,6 +153,40 @@ function clearIsochrones() {
         currentIsochrones = [];
         selectedPointIndex = null;
     }
+}
+
+// Function to toggle isochrones visibility
+function toggleIsochrones() {
+    isochronesEnabled = !isochronesEnabled;
+    
+    // Update button appearance
+    const isochroneToggle = document.getElementById('toggle-isochrones');
+    if (isochroneToggle) {
+        if (isochronesEnabled) {
+            isochroneToggle.classList.remove('disabled');
+            isochroneToggle.title = "Hide isochrones";
+        } else {
+            isochroneToggle.classList.add('disabled');
+            isochroneToggle.title = "Show isochrones";
+        }
+    }
+    
+    // If we have a selected point, update isochrones
+    if (selectedPoint !== null) {
+        if (isochronesEnabled) {
+            // Use selectedPoint instead of selectedPointIndex
+            showIsochrones(selectedPoint);
+        } else {
+            clearIsochrones();
+        }
+    }
+    
+    // Show a notification
+    showNotification(
+        isochronesEnabled ? "Isochrones enabled" : "Isochrones disabled", 
+        "info", 
+        1500
+    );
 }
 
 // Helper function to calculate bearing between two points
@@ -1937,9 +1974,8 @@ function displayMarkers(fitBounds = true) {
                 // Edit mode: Select point for editing but don't show dialog
                 selectPoint(index);
                 
-                // Display storm attributes without dialog
+                // MODIFIED: Don't display storm attributes in edit mode
                 clearAllStormVisualizations();
-                displayStormAttributes(index);
                 
                 // Clear any existing isochrones and show for this point
                 clearIsochrones();
@@ -2115,7 +2151,7 @@ function clearAllGhostMarkers() {
     });
 }
 
-// Select a point for editing - Updated to handle isochrones
+// Select a point for editing - Updated to handle isochrones and hide storm attributes in edit mode
 function selectPoint(index) {
     // If we're selecting a different point, clear isochrones from previous point
     if (selectedPoint !== index) {
@@ -2123,6 +2159,9 @@ function selectPoint(index) {
     }
     
     selectedPoint = index;
+    
+    // Also update selectedPointIndex to keep them in sync
+    selectedPointIndex = index;
     
     // Highlight selected marker
     markers.forEach(marker => {
@@ -2137,9 +2176,15 @@ function selectPoint(index) {
     // Grey out other points
     greyOutOtherPoints(index);
     
-    // If in edit mode, show isochrones for selected point
-    if (editMode) {
+    // If in edit mode and isochrones are enabled, show isochrones for selected point
+    if (editMode && isochronesEnabled) {
         showIsochrones(index);
+    }
+    
+    // Only display storm attributes in view mode (NOT in edit mode)
+    if (!editMode) {
+        clearStormVisualizations(index);
+        displayStormAttributes(index);
     }
 }
 
@@ -2157,8 +2202,8 @@ function updatePointLocation(index, latlng) {
     // Update the track line
     displayTrackLine();
     
-    // If we're in edit mode, update any visualizations for this point
-    if (editMode && stormCircles[index]) {
+    // If we're in view mode, update any visualizations for this point
+    if (!editMode && stormCircles[index]) {
         clearStormVisualizations(index);
         displayStormAttributes(index);
     }
@@ -2192,11 +2237,33 @@ function toggleEditMode() {
     // Update UI
     const modeStatus = document.getElementById('mode-status');
     if (editMode) {
-        modeStatus.textContent = 'Move Cyclone Position';  // Changed from 'Edit Cyclone Parameters'
+        modeStatus.textContent = 'Move Cyclone Position';
         modeStatus.className = 'edit-mode';
+        
+        // Show the isochrone toggle button when in edit mode
+        const isochroneToggle = document.getElementById('toggle-isochrones');
+        if (isochroneToggle) {
+            isochroneToggle.style.display = 'inline-block';
+        }
     } else {
-        modeStatus.textContent = 'Edit Cyclone Parameters'; // Changed from 'Move Cyclone Position'
+        modeStatus.textContent = 'Edit Cyclone Parameters';
         modeStatus.className = 'view-mode';
+        
+        // Hide the isochrone toggle button when not in edit mode
+        const isochroneToggle = document.getElementById('toggle-isochrones');
+        if (isochroneToggle) {
+            isochroneToggle.style.display = 'none';
+        }
+        
+        // When switching to view mode, show storm attributes for selected point
+        if (selectedPoint !== null) {
+            displayStormAttributes(selectedPoint);
+        }
+    }
+    
+    // If switching to edit mode and we have a selected point, show isochrones if enabled
+    if (editMode && selectedPoint !== null && isochronesEnabled) {
+        showIsochrones(selectedPoint);
     }
     
     // Reload markers with new draggable status but preserve current view

@@ -34,6 +34,9 @@ function formatPopupContent(point, index) {
     
     // Format datetime fields into a single string
     function formatDateTime(point) {
+        // console log the points time variables for debugging
+        console.log("Formatting date/time for point:", point);
+        console.log("UTC Time:", point.year_utc, point.month_utc, point.day_utc, point.hour_utc, point.minute_utc);
         // Check if we have the necessary UTC time fields
         if (point.year_utc !== undefined && 
             point.month_utc !== undefined && 
@@ -63,10 +66,10 @@ function formatPopupContent(point, index) {
         console.log("Formatting wind with unit system:", currentUnitSystem);
         
         if (currentUnitSystem === 'metric') {
-            return `${formatNum(speed || 0)} m/s`;
+            return `${formatNum(speed || "N/A")} m/s`;
         } else {
             const conversion = window.UNIT_CONVERSIONS ? window.UNIT_CONVERSIONS.WIND_MS_TO_MPH : 2.23694;
-            return `${formatNum((speed || 0) * conversion)} mph`;
+            return `${formatNum((speed || "N/A") * conversion)} mph`;
         }
     }
     
@@ -90,13 +93,23 @@ function formatPopupContent(point, index) {
     // Get the hurricane category to style the popup
     const category = getHurricaneCategory(point.wind_speed);
     
+    // Get cyclone information if available
+    const cycloneId = point.cycloneId || '';
+    const cycloneName = point.cycloneName || `Cyclone Position #${index}`;
+    
     // Increased max-height from 500px to 625px (25% taller)
     let content = `<div class="popup-content" style="border-color:${category.color}; max-height: 625px;">`;
     
-    // Header section with same color as border but improved text contrast
+    // Header section with cyclone name and ID
     content += `<div class="popup-header" style="background-color:${category.color}40; border-color:${category.color}">
-        <strong style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);">Cyclone Position #${index}</strong>
-        <span class="popup-category" style="background-color:${category.color}; color:#000000; text-shadow:none;">
+        <strong style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);">${cycloneName}</strong>`;
+    
+    // Add cyclone ID if available
+    if (cycloneId) {
+        content += `<span class="popup-cyclone-id">${cycloneId}</span>`;
+    }
+    
+    content += `<span class="popup-category" style="background-color:${category.color}; color:#000000; text-shadow:none;">
             ${category.name}
         </span>
     </div>`;
@@ -129,6 +142,26 @@ function formatPopupContent(point, index) {
             <strong class="var-name">TIME:</strong> 
             <span class="var-value">${dateTime}</span>
         </div>`;
+    }
+    
+    // Add forecast lead time for ADECK data if available
+    if (point.tau !== undefined || point.forecast_lead !== undefined) {
+        const forecastHours = point.forecast_lead !== undefined ? point.forecast_lead : point.tau;
+        content += `
+        <div class="metric">
+            <strong class="var-name">FORECAST LEAD:</strong> 
+            <span class="var-value">${forecastHours} hours</span>
+        </div>`;
+        
+        // Show initialization time if available to provide context for forecast
+        if (point.init_time || point.initTime) {
+            const initTime = point.init_time || point.initTime;
+            content += `
+            <div class="metric">
+                <strong class="var-name">INIT TIME:</strong> 
+                <span class="var-value">${initTime ? window.AdeckReader?.formatDateTime(initTime) || initTime : 'N/A'}</span>
+            </div>`;
+        }
     }
     
     // Add storm radius metrics
@@ -232,23 +265,32 @@ L.Marker.prototype.bindPopup = function(content, options) {
     
     // Add custom event handler to reposition popup on open
     this.on('popupopen', function(e) {
-        // Force right-side positioning after popup opens
-        setTimeout(() => {
-            const popup = e.popup;
-            if (popup && popup._container) {
-                // Get positions
-                const markerPoint = this._map.latLngToContainerPoint(this.getLatLng());
-                const popupPoint = this._map.latLngToContainerPoint(popup.getLatLng());
-                
-                // If popup is not to the right of the marker, move it there
-                if (popupPoint.x <= markerPoint.x + 15) {
-                    const newLatLng = this._map.containerPointToLatLng(
-                        L.point(markerPoint.x + 250, markerPoint.y)
-                    );
-                    popup.setLatLng(newLatLng);
-                }
+        const isEditMode = typeof window.editMode !== 'undefined' ? window.editMode : false;
+        
+        // In parameter edit mode (not edit mode), prevent popup from opening
+        if (!isEditMode && e.originalEvent) {
+            // Check if we should use floating dialog instead
+            const pointIndex = this.pointIndex;
+            if (typeof pointIndex !== 'undefined') {
+                // Close the popup that was just opened
+                setTimeout(() => {
+                    this.closePopup();
+                    
+                    // Create floating dialog instead
+                    if (typeof window.createFloatingDialog === 'function') {
+                        window.createFloatingDialog(pointIndex);
+                    }
+                }, 10);
+                return false;
             }
-        }, 10);
+        }
+        
+        // Force right-side positioning after popup opens (only for position edit mode)
+        if (isEditMode) {
+            setTimeout(() => {
+                window.positionPopupToRight(this, this._popup);
+            }, 10);
+        }
     });
     
     return result;
@@ -311,5 +353,6 @@ popupStyle.textContent = `
 `;
 document.head.appendChild(popupStyle);
 
-// Make this function globally available
+// Make these functions globally available
 window.formatPopupContent = formatPopupContent;
+window.positionPopupToRight = positionPopupToRight;

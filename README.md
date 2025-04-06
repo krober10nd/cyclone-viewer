@@ -1,11 +1,7 @@
-## Cyclone Track Editor/Visualizer
-
-
-
-<p align="center">
-  <img src="image1_v1.png" alt="Image 1" width="45%" style="margin-right: 10px;"/>
-  <img src="image2_v1.png" alt="Image 2" width="45%"/>
-</p>
+# <p align="center">
+  <img src="docs/logo.png" alt="Cyclone Vortex" width="100"/>
+  </p>
+# Cyclone Track Editor/Visualizer
 
 A simple application for visualizing and editing tropical cyclone tracks with meteorological parameters.
 
@@ -62,7 +58,7 @@ You can also open the application directly in a web browser:
 
 #### Example Track Visualization
 
-![Example Track](image3_v1.png)
+![Example Track](docs/sample_track.png)
 
 ### Editing cyclone parameters
 1. Click on a storm position to view its details
@@ -74,6 +70,9 @@ You can also open the application directly in a web browser:
 - **Toggle Units**: Switch between metric and imperial units
 - **Scale**: Choose between Saffir-Simpson and Australian BoM scales
 - **Export**: Export edited track data to CSV
+
+### A-Deck Functionality
+The application supports A-deck data, which includes forecasted cyclone tracks and parameters. Users can load A-deck files in CSV format to visualize and compare forecasted tracks with observed data.
 
 ## Building for Distribution
 

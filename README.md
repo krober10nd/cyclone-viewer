@@ -3,7 +3,7 @@
   </p>
 # Cyclone Track Editor/Visualizer
 
-A simple application for visualizing and editing tropical cyclone tracks with meteorological parameters.
+An application for visualizing and editing tropical cyclone tracks with meteorological parameters.
 
 ## Installation
 
@@ -14,7 +14,7 @@ A simple application for visualizing and editing tropical cyclone tracks with me
 ### Setup
 1. Clone this repository:
    ```
-   git clone https://github.com/your-username/cyclone_viewer.git
+   git clone https://github.com/krober10nd/cyclone_viewer.git
    cd cyclone_viewer
    ```
 

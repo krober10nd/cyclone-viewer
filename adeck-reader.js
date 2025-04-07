@@ -417,22 +417,28 @@ window.AdeckReader = {
     isKnownModel: function(model) {
         return !!this.getModelColor(model);
     },
-
-    /**
-     * Check if a model should be displayed by default
+    /** 
+     * create isDefaultModel with ALL the models
      */
     isDefaultModel: function(model) {
-        // Models to show by default (most important ones)
+        // Models to show by default all the models 
         const defaultModels = [
-            'OFCL', 'CARQ', 'BEST',
-            'AVNO', 'GFS', 'HWRF', 'HMON',
-            'ECMF', 'ECMWF', 'UKM', 'UKMET',
-            'CMC', 'TVCN'
+            'OFCL', 'OFCI', 'CARQ',
+            'AVNO', 'AVNI', 'GFS',
+            'GFDI', 'GFDL', 'GFDT', 'GFDN',
+            'UKMI', 'UKM', 'UKX', 'UKXI', 'UKX2', 'UKM2',
+            'CMC', 'HWRF', 'HMON',
+            'EMXI', 'EMX', 'EMX2', 'ECMWF',
+            'NGPS', 'NGPI', 'NGP2',
+            'DSHP', 'SHIP', 'LGEM', 'SHFR', 'SHNS', 'DRCL',
+            'TVCN', 'TVCE', 'TVCX',
+            'CONU', 'GUNA', 'GUNS', 'HCCA',
+            'BAMD', 'BAMM', 'BAMS', 'LBAR', 'XTRP',
+            'CLIP', 'CLP5', 'DRCL', 'MRCL',
+            // Add all other models here
         ];
-        
         return defaultModels.includes(model);
     },
-
     /**
      * Process tracks for display by adding special styling for first points
      */

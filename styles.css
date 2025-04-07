@@ -3490,3 +3490,12 @@ body.dark-mode .datetime-label div,
     grid-template-columns: repeat(3, 1fr);
     gap: 3px;
 }
+
+.category-checkbox-label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.category-checkbox {
+    margin-right: 5px;
+}

@@ -4230,32 +4230,84 @@ function showStormSelectionDialog(storms) {
     }
     
     // Add change handler for dropdown
-    categoryDropdown.addEventListener('change', function() {
-        const selectedCategory = this.value;
-        const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
+    //categoryDropdown.addEventListener('change', function() {
+        //const selectedCategory = this.value;
+       // const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
+       // 
+       // // Filter storms by both init time and category
+       // let filteredStorms = storms;
+       // 
+       // // First filter by init time if selected
+       // if (selectedInitTime) {
+       //     filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
+       // }
+       // 
+       // // Then filter by model category if not "all"
+       // if (selectedCategory !== 'all') {
+       //     const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
+       //     filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
+       // }
+       // 
+       // // Display the filtered tracks
+       // displayAdeckTracks(filteredStorms, selectedStormId);
+       // 
+       // // Show notification
+       // showNotification(`Displaying ${selectedCategory} model tracks`, 'info', 1500);
+    //});
+        const categories = [
+            { id: 'track_intensity', name: 'Track & Intensity Models' },
+            { id: 'track_only', name: 'Track-Only Models' },
+            { id: 'all', name: 'All Models' }
+        ];
         
-        // Filter storms by both init time and category
-        let filteredStorms = storms;
+        let selectedCategory = 'all'; // Default category
         
-        // First filter by init time if selected
-        if (selectedInitTime) {
-            filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
-        }
+        categories.forEach(category => {
+            const label = document.createElement('label');
+            label.className = 'category-checkbox-label';
         
-        // Then filter by model category if not "all"
-        if (selectedCategory !== 'all') {
-            const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
-            filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
-        }
+            const checkbox = document.createElement('input');
+            checkbox.type = 'radio';
+            checkbox.name = 'model-category';
+            checkbox.value = category.id;
+            checkbox.checked = category.id === selectedCategory;
+            checkbox.className = 'category-checkbox';
         
-        // Display the filtered tracks
-        displayAdeckTracks(filteredStorms, selectedStormId);
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    selectedCategory = this.value;
+                
+                    // Filter storms by both init time and category
+                    const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
+                    let filteredStorms = storms;
+                
+                    // First filter by init time if selected
+                    if (selectedInitTime) {
+                        filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
+                    }
+                
+                    // Then filter by model category if not "all"
+                    if (selectedCategory !== 'all') {
+                        const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
+                        filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
+                    }
+                
+                    // Display the filtered tracks
+                    displayAdeckTracks(filteredStorms, selectedStormId);
+                
+                    // Show notification
+                    showNotification(`Displaying ${category.name} model tracks`, 'info', 1500);
+                }
+            });
         
-        // Show notification
-        showNotification(`Displaying ${selectedCategory} model tracks`, 'info', 1500);
-    });
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(category.name));
+            modelCategorySelector.appendChild(label);
+        });
     
-    modelCategorySelector.appendChild(categoryDropdown);
+   
+    
+    //modelCategorySelector.appendChild(categoryDropdown);
     dialog.appendChild(modelCategorySelector);
     
     // Create content container

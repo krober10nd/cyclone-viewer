@@ -4132,15 +4132,29 @@ function showStormSelectionDialog(storms) {
     // Create dialog header with cyclone name and controls
     const header = document.createElement('div');
     header.className = 'dialog-header';
-    header.style.cursor = 'move'; // Add cursor hint for draggability
+    header.style.cursor = 'move';    
     
-    // Add header title and controls
+    //// Add header title and controls with new show/hide all button
+    //header.innerHTML = `
+    //    <h3>${cycloneName}</h3>
+    //    <div class="dialog-controls">
+    //        <button id="toggle-all-tracks" class="toggle-tracks-btn" title="Toggle all tracks visibility">Show All</button>
+    //        <button class="minimize-btn" title="Minimize dialog">_</button>
+    //        <button class="close-btn" title="Close dialog">&times;</button>
+    //    </div>
+    //`;
+    // Add header title and controls with better positioning
     header.innerHTML = `
-        <h3>${cycloneName}</h3>
-        <div class="dialog-controls">
+    <h3>${cycloneName}</h3>
+    <div class="dialog-controls">
+        <div class="track-toggle-container">
+            <button id="toggle-all-tracks" class="toggle-tracks-btn" title="Toggle all tracks visibility">Show All</button>
+        </div>
+        <div class="window-controls">
             <button class="minimize-btn" title="Minimize dialog">_</button>
             <button class="close-btn" title="Close dialog">&times;</button>
         </div>
+    </div>
     `;
     dialog.appendChild(header);
     
@@ -4355,6 +4369,68 @@ function showStormSelectionDialog(storms) {
         adeckDialogWasShown = true;
         // Don't trigger any zoom changes when closing
     });
+    
+    // Add toggle all tracks button functionality
+    const toggleAllTracksBtn = dialog.querySelector('#toggle-all-tracks');
+    if (toggleAllTracksBtn) {
+        // Create a flag to track track visibility state - initially all tracks are shown
+        let allTracksVisible = true;
+        
+        toggleAllTracksBtn.addEventListener('click', function() {
+            // Toggle the state
+            allTracksVisible = !allTracksVisible;
+            
+            // Update button text
+            this.textContent = allTracksVisible ? 'Hide All' : 'Show All';
+            this.title = allTracksVisible ? 'Hide all tracks' : 'Show all tracks';
+            
+            // Toggle visibility of all track layers
+            if (window.adeckLines && window.adeckLines.length > 0) {
+                window.adeckLines.forEach(line => {
+                    if (line) {
+                        if (allTracksVisible) {
+                            line.addTo(window.adeckLayerGroup);
+                        } else {
+                            window.adeckLayerGroup.removeLayer(line);
+                        }
+                    }
+                });
+            }
+            
+            // Toggle visibility of all track markers
+            if (window.adeckMarkers && window.adeckMarkers.length > 0) {
+                window.adeckMarkers.forEach(marker => {
+                    if (marker) {
+                        if (allTracksVisible) {
+                            marker.addTo(window.adeckLayerGroup);
+                        } else {
+                            window.adeckLayerGroup.removeLayer(marker);
+                        }
+                    }
+                });
+            }
+            
+            // If a track is selected, keep it visible regardless
+            if (selectedStormId !== null) {
+                // Ensure the selected track remains visible
+                window.adeckLines.forEach((line, index) => {
+                    if (line && line.stormId === selectedStormId) {
+                        line.addTo(window.adeckLayerGroup);
+                    }
+                });
+                
+                window.adeckMarkers.forEach((marker, index) => {
+                    if (marker && marker.stormId === selectedStormId) {
+                        marker.addTo(window.adeckLayerGroup);
+                    }
+                });
+            }
+        });
+        
+        // Initialize button text (initially all tracks are shown)
+        toggleAllTracksBtn.textContent = 'Hide All';
+        toggleAllTracksBtn.title = 'Hide all tracks';
+    }
     
     // Add visual highlight to dialog header on hover
     header.addEventListener('mouseenter', () => {

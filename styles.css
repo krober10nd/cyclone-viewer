@@ -193,6 +193,22 @@ h3 {
     color: #ffdd00;
 }
 
+/* ADECK file upload styling */
+.adeck-upload {
+    margin-left: 10px;
+    background-color: rgba(54, 162, 235, 0.1);
+    border-color: rgba(54, 162, 235, 0.5);
+}
+
+.adeck-upload:hover {
+    background-color: rgba(54, 162, 235, 0.15);
+    border-color: rgba(54, 162, 235, 0.7);
+}
+
+.adeck-upload .upload-icon {
+    color: #36a2eb;
+}
+
 /* Buttons */
 .btn, button {
     background-color: var(--accent);
@@ -2224,4 +2240,1253 @@ body.dark-mode .datetime-label div,
 .datetime-label.edit-mode div {
     background-color: rgba(0, 0, 0, 0.75);  /* Slightly more opaque for visibility */
     font-weight: 600;  /* Bolder font weight */
+}
+
+/* Storm Selection Dialog */
+.storm-selection-dialog {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    background-color: var(--panel-bg);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+/* Dialog Header with Controls */
+.storm-selection-dialog .dialog-header {
+    padding: 12px 15px;
+    background: linear-gradient(to right, #343434, #444444);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.storm-selection-dialog .dialog-header h3 {
+    margin: 0;
+    color: white;
+    font-size: 16px;
+    flex: 1;
+}
+
+.storm-selection-dialog .cyclone-id {
+    position: absolute;
+    top: 4px;
+    right: 50px; /* Increased from 40px to provide more space */
+    font-size: 11px; /* Slightly smaller font */
+    color: rgba(255, 255, 255, 0.8); /* Brighter text for better readability */
+    padding: 2px 6px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.3);
+    font-family: monospace;
+    max-width: 100px; /* Limit width to prevent extreme overlap */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* Add ellipsis for text overflow */
+    z-index: 1; /* Ensure proper stacking */
+}
+
+/* Alternative display for narrow dialogs - moves cyclone ID below title */
+@media (max-width: 350px) {
+    .storm-selection-dialog .cyclone-id {
+        position: static; /* Remove absolute positioning */
+        display: block;
+        margin-top: 4px;
+        margin-left: 0;
+        max-width: none; /* Allow full width */
+        font-size: 10px;
+    }
+    
+    .storm-selection-dialog .dialog-header h3 {
+        margin-bottom: 2px; /* Add space for the ID below */
+    }
+}
+
+/* Dialog controls layout */
+.dialog-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.track-toggle-container {
+    margin-right: auto;
+}
+
+.window-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.toggle-tracks-btn {
+    margin-right: 20px;
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 12px;
+    min-width: 80px;
+    text-align: center;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.toggle-tracks-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.minimize-btn, .close-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+}
+
+.storm-selection-dialog .dialog-content {
+    padding: 0;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.storm-selection-dialog .dialog-content {
+    padding: 0;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.storm-selection-dialog .storm-list {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.storm-selection-dialog .year-section {
+    border-bottom: 1px solid var(--border);
+}
+
+.storm-selection-dialog .year-header {
+    margin: 0;
+    padding: 10px 15px;
+    background-color: rgba(0, 0, 0, 0.1);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.storm-selection-dialog .basin-section {
+    padding: 5px 0;
+}
+
+.storm-selection-dialog .basin-header {
+    margin: 0;
+    padding: 5px 15px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.storm-selection-dialog .storm-item {
+    padding: 8px 20px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    color: var(--text-primary);
+}
+
+.storm-selection-dialog .storm-item:hover {
+    background-color: rgba(54, 162, 235, 0.1);
+}
+
+.storm-selection-dialog .close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+/* Storm Item Badge Indicators */
+.storm-selection-dialog .storm-item::after {
+    content: attr(data-count);
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 5px;
+    background-color: rgba(54, 162, 235, 0.2);
+    border-radius: 10px;
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.storm-selection-dialog .empty-state {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Storm Selection Dialog - Model Section */
+.storm-selection-dialog .model-section {
+    padding: 0 0 5px 0;
+    margin-left: 15px;
+}
+
+.storm-selection-dialog .model-header {
+    margin: 0;
+    padding: 5px 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: #4a94ff; /* Accent color for model headers */
+}
+
+.storm-selection-dialog .storm-item {
+    padding: 6px 15px 6px 25px; /* Increased left padding for indentation */
+    cursor: pointer;
+    transition: background-color 0.2s;
+    color: var(--text-primary);
+    border-left: 2px solid transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.storm-selection-dialog .storm-item:hover {
+    background-color: rgba(54, 162, 235, 0.1);
+    border-left: 2px solid #4a94ff;
+}
+
+.storm-selection-dialog .storm-item.selected {
+    background-color: rgba(74, 148, 255, 0.15);
+    border-left: 2px solid var(--accent);
+    font-weight: 500;
+}
+
+/* Enhance model name display */
+.storm-selection-dialog .model-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--accent); /* Use accent color for model names */
+    font-family: monospace; /* Use monospace for model codes like "CMC" */
+}
+
+.storm-selection-dialog .model-position {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-left: 12px;
+    font-family: monospace;
+}
+
+.storm-selection-dialog .model-points {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-left: 12px;
+}
+
+/* Enhanced Selected Model Info */
+.storm-selection-dialog .selected-model-info {
+    padding: 8px 15px;
+    background-color: rgba(74, 148, 255, 0.1);
+    border-bottom: 1px solid rgba(74, 148, 255, 0.2);
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.storm-selection-dialog .selected-model-label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.storm-selection-dialog .model-points-info {
+    font-size: 11px;
+    background-color: rgba(74, 148, 255, 0.2);
+    padding: 2px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+/* Date header formatting */
+.storm-selection-dialog .date-header {
+    margin: 0;
+    padding: 10px 15px;
+    background-color: rgba(0, 0, 0, 0.1);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Basin header formatting */
+.storm-selection-dialog .basin-header {
+    margin: 0;
+    padding: 5px 15px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* Track first point styling */
+.track-first-point {
+    box-shadow: 0 0 0 3px #ffffff !important;
+    position: relative;
+    z-index: 1000 !important; /* Higher z-index to ensure visibility */
+}
+
+/* Add a subtle pulsing animation to make the first point more noticeable */
+@keyframes pulse-outline {
+    0% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+    50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 1); }
+    100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+}
+
+.track-first-point {
+    animation: pulse-outline 2s infinite;
+    border-radius: 50%;
+}
+
+/* Make sure our styling doesn't get overridden by other styles */
+.leaflet-marker-icon.track-first-point {
+    box-shadow: 0 0 0 3px #ffffff !important;
+    z-index: 1000 !important;
+}
+
+/* ADECK display dialog enhancements */
+.adeck-model-selector {
+    padding: 10px;
+    border-bottom: 1px solid #444;
+    background-color: #252525;
+}
+
+.adeck-model-heading {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.adeck-model-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 5px;
+}
+
+.adeck-model-button {
+    background-color: #3a3a3a;
+    color: var(--text-primary);
+    border: 1px solid #505050;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.adeck-model-button:hover {
+    background-color: #505050;
+}
+
+.adeck-model-button.selected {
+    background-color: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+.adeck-tracks-table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 0 5px;
+}
+
+/* Row highlighting for selected vs non-selected tracks */
+.forecast-row {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.forecast-row:hover {
+    background-color: rgba(74, 148, 255, 0.1);
+}
+
+.forecast-row.selected-track {
+    opacity: 1;
+    font-weight: 500;
+    background-color: rgba(74, 148, 255, 0.15);
+}
+
+.forecast-row.non-selected-track {
+    opacity: 0.3;
+}
+
+/* First point styling with white outline */
+.track-first-point {
+    box-shadow: 0 0 0 3px #ffffff !important;
+    position: relative;
+    z-index: 1000 !important; /* Higher z-index to ensure visibility */
+}
+
+/* Add a subtle pulsing animation to make the first point more noticeable */
+@keyframes pulse-outline {
+    0% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+    50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 1); }
+    100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+}
+
+.track-first-point {
+    animation: pulse-outline 2s infinite;
+    border-radius: 50%;
+}
+
+/* Make sure our styling doesn't get overridden by other styles */
+.leaflet-marker-icon.track-first-point {
+    box-shadow: 0 0 0 3px #ffffff !important;
+    z-index: 1000 !important;
+}
+
+/* Model tabs styling for ADECK dialog */
+.model-tabs-container {
+    margin: 10px 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.model-tabs-header {
+    display: flex;
+    flex-wrap: wrap;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid var(--border);
+}
+
+.model-tab {
+    background: none;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-right: 1px solid var(--border);
+    border-bottom: 3px solid transparent;
+    color: var(--text-primary);
+    font-size: 12px;
+    transition: all 0.3s;
+}
+
+.model-tab:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.model-tab.active {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-bottom: 3px solid var(--accent);
+    font-weight: 600;
+}
+
+.model-tabs-content {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.model-tab-content {
+    display: none;
+    padding: 10px;
+}
+
+.model-tab-content.active {
+    display: block;
+}
+
+.storm-item {
+    padding: 8px 10px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    background-color: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.storm-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.storm-item.selected {
+    background-color: rgba(66, 134, 244, 0.3);
+    border-left: 3px solid var(--accent);
+}
+
+.storm-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.storm-name {
+    font-weight: 500;
+}
+
+.storm-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.no-models-message {
+    font-style: italic;
+    color: var(--text-secondary);
+    padding: 10px;
+    text-align: center;
+}
+
+/* Styling for the selected model info in minimized state */
+.selected-model-info {
+    padding: 8px 12px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    text-align: center;
+}
+
+.selected-model-info.hidden {
+    display: none;
+}
+
+.selected-model-label {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+/* Init Time Selector styling */
+.init-time-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    background-color: #2a2a2a;
+    border-bottom: 1px solid #444;
+}
+
+.init-time-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.init-time-dropdown {
+    flex: 1;
+    padding: 5px 8px;
+    background-color: #333;
+    color: var(--text-primary);
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 13px;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23fff' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 8px;
+    padding-right: 24px;
+}
+
+.init-time-display-all {
+    padding: 5px 10px;
+    background-color: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.init-time-display-all:hover {
+    background-color: var(--accent-hover);
+}
+
+/* Model comparison visualization - different colors for each model */
+.model-track-HWRF {
+    stroke: #ff6600 !important;
+    stroke-width: 2.5px !important;
+}
+
+.model-track-HMON {
+    stroke: #33cc33 !important;
+    stroke-width: 2.5px !important;
+}
+
+.model-track-GFS {
+    stroke: #ff3333 !important;
+    stroke-width: 2.5px !important;
+}
+
+.model-track-ECMWF {
+    stroke: #3366ff !important;
+    stroke-width: 2.5px !important;
+}
+
+.model-track-UKMET {
+    stroke: #cc33cc !important;
+    stroke-width: 2.5px !important;
+}
+
+.model-track-NVGM {
+    stroke: #ff9900 !important;
+    stroke-width: 2.5px !important;
+}
+
+.model-track-CMC {
+    stroke: #00cccc !important;
+    stroke-width: 2.5px !important;
+}
+
+.model-track-AVNO {
+    stroke: #cccc00 !important;
+    stroke-width: 2.5px !important;
+}
+
+/* Default color for other models */
+.model-track {
+    stroke: #aaaaaa !important;
+    stroke-width: 2px !important;
+}
+
+/* Add this to your main CSS file */
+.hurricane-marker.first-point {
+    z-index: 1000 !important;
+}
+
+.first-point-marker {
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Fix for marker alignment at high zoom levels */
+.leaflet-marker-icon {
+    transform-origin: center center !important;
+}
+
+/* A-Deck controls styling */
+.adeck-toolbar-group {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+}
+
+/* A-Deck file controls */
+#adeck-file-controls {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.adeck-file-indicator {
+    display: flex;
+    align-items: center;
+    background-color: #3498db;
+    color: white;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.adeck-file-indicator:hover {
+    background-color: #2980b9;
+}
+
+.adeck-file-indicator.file-loaded {
+    background-color: #27ae60;
+}
+
+.adeck-file-indicator.file-loaded:hover {
+    background-color: #2ecc71;
+}
+
+.adeck-clear-button {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px;
+    margin-left: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.adeck-clear-button:hover {
+    background-color: #c0392b;
+}
+
+.adeck-file-indicator .icon,
+.adeck-clear-button .icon {
+    margin-right: 5px;
+}
+
+/* Font Awesome hurricane icon */
+.fa-hurricane:before {
+    content: "\f751";
+}
+
+/* A-Deck dialog enhancements */
+.storm-selection-dialog {
+    z-index: 1000;
+    background-color: rgba(40, 40, 40, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+}
+
+.storm-selection-dialog.dragging {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+    opacity: 0.9;
+    user-select: none;
+}
+
+.storm-selection-dialog .dialog-header {
+    padding: 10px 12px;
+    background-color: rgba(60, 60, 60, 0.8);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background-color 0.2s ease;
+}
+
+.storm-selection-dialog .dialog-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: normal;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+}
+
+/* Cursor indicator for draggable areas */
+.dialog-header {
+    cursor: move !important;
+}
+
+/* Improved button styling */
+.dialog-controls button {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    padding: 0;
+    margin-left: 5px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.dialog-controls button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Add styles for the deselect-all button */
+.deselect-btn {
+    background-color: rgba(40, 40, 40, 0.8);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background-color 0.2s;
+}
+
+.deselect-btn:hover {
+    background-color: rgba(60, 60, 60, 0.9);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.deselect-btn i {
+    font-size: 14px;
+}
+
+/* Use a red X icon */
+.fa-times-circle:before {
+    content: "✖";
+    color: #ff6b6b;
+}
+
+/* Ensure the compact-controls container displays buttons properly */
+.compact-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Add styles for the reopen button */
+.reopen-adeck-btn {
+    background-color: rgba(40, 40, 40, 0.8);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.reopen-adeck-btn:hover {
+    background-color: rgba(60, 60, 60, 0.9);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+
+.reopen-adeck-btn i {
+    font-size: 16px;
+}
+
+/* Style for model-specific track colors in the legend */
+.model-color-legend {
+    margin-top: 10px;
+    padding: 5px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.model-color-item {
+    display: flex;
+    align-items: center;
+    margin: 3px 0;
+}
+
+.model-color-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.model-name {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Additional style for A-deck point markers */
+.adeck-point-marker {
+    transition: opacity 0.2s ease;
+}
+
+.selected-marker {
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.7));
+}
+
+.first-point {
+    z-index: 1000 !important;
+}
+
+/* Model category containers */
+.model-category {
+    margin-bottom: 10px;
+}
+
+.category-label {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #ccc;
+}
+
+.category-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+/* Toggle switch styles */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+    font-size: 11px;
+    user-select: none;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 30px;
+    height: 16px;
+    background-color: #555;
+    border-radius: 10px;
+    transition: background-color 0.2s;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 12px;
+    width: 12px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    border-radius: 50%;
+    transition: left 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #3498db;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    left: 16px;
+}
+
+/* Model selector header */
+.adeck-model-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+/* Adjustments to existing styles */
+.adeck-model-selector {
+    margin-bottom: 15px;
+}
+
+.model-color-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+}
+
+/* Style for visibility toggle buttons */
+.visibility-toggle {
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 16px;
+    line-height: 1;
+    min-width: 22px;
+    text-align: center;
+}
+
+.visibility-toggle[data-visible="false"] {
+    color: #999;
+    opacity: 0.7;
+}
+
+/* Hover effects for better UX */
+.visibility-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* A-Deck controls styling */
+.adeck-toolbar-group {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+}
+
+/* A-Deck file controls */
+#adeck-file-controls {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.adeck-file-indicator {
+    display: flex;
+    align-items: center;
+    background-color: #3498db;
+    color: white;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.adeck-file-indicator:hover {
+    background-color: #2980b9;
+}
+
+.adeck-file-indicator.file-loaded {
+    background-color: #27ae60;
+}
+
+.adeck-file-indicator.file-loaded:hover {
+    background-color: #2ecc71;
+}
+
+.adeck-clear-button {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px;
+    margin-left: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.adeck-clear-button:hover {
+    background-color: #c0392b;
+}
+
+.adeck-file-indicator .icon,
+.adeck-clear-button .icon {
+    margin-right: 5px;
+}
+
+/* Font Awesome hurricane icon */
+.fa-hurricane:before {
+    content: "\f751";
+}
+
+/* A-Deck dialog enhancements */
+.storm-selection-dialog {
+    z-index: 1000;
+    background-color: rgba(40, 40, 40, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+}
+
+.storm-selection-dialog.dragging {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+    opacity: 0.9;
+    user-select: none;
+}
+
+.storm-selection-dialog .dialog-header {
+    padding: 10px 12px;
+    background-color: rgba(60, 60, 60, 0.8);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background-color 0.2s ease;
+}
+
+.storm-selection-dialog .dialog-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: normal;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+}
+
+/* Cursor indicator for draggable areas */
+.dialog-header {
+    cursor: move !important;
+}
+
+/* Improved button styling */
+.dialog-controls button {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    padding: 0;
+    margin-left: 5px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.dialog-controls button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Add styles for the reopen button */
+.reopen-adeck-btn {
+    background-color: rgba(40, 40, 40, 0.8);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.reopen-adeck-btn:hover {
+    background-color: rgba(60, 60, 60, 0.9);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+
+.reopen-adeck-btn i {
+    font-size: 16px;
+}
+
+/* Style for model-specific track colors in the legend */
+.model-color-legend {
+    margin-top: 10px;
+    padding: 5px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.model-color-item {
+    display: flex;
+    align-items: center;
+    margin: 3px 0;
+}
+
+.model-color-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.model-name {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Additional style for A-deck point markers */
+.adeck-point-marker {
+    transition: opacity 0.2s ease;
+}
+
+.selected-marker {
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.7));
+}
+
+.first-point {
+    z-index: 1000 !important;
+}
+
+/* Model category containers */
+.model-category {
+    margin-bottom: 10px;
+}
+
+.category-label {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #ccc;
+}
+
+.category-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+/* Toggle switch styles */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+    font-size: 11px;
+    user-select: none;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 30px;
+    height: 16px;
+    background-color: #555;
+    border-radius: 10px;
+    transition: background-color 0.2s;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 12px;
+    width: 12px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    border-radius: 50%;
+    transition: left 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #3498db;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    left: 16px;
+}
+
+/* Model selector header */
+.adeck-model-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+/* Adjustments to existing styles */
+.adeck-model-selector {
+    margin-bottom: 15px;
+}
+
+.model-color-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
 }

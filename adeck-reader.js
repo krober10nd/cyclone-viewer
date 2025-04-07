@@ -7,6 +7,45 @@ window.AdeckReader = {
     // Initialize hiddenTracks as an object at the top level
     hiddenTracks: {},
 
+
+    addFixViewButton: function() {
+        const dialog = document.getElementById('adeck-storm-selection');
+        if (dialog) {
+            // Create the Fix View button
+            const fixViewButton = document.createElement('button');
+            fixViewButton.textContent = 'Fix View';
+            fixViewButton.className = 'fix-view-button';
+
+            // Add click event listener to toggle the fix view state
+            fixViewButton.addEventListener('click', function () {
+                window.isViewFixed = !window.isViewFixed;
+
+                if (window.isViewFixed) {
+                    // Store the current map bounds
+                    window.fixedBounds = map.getBounds();
+                    console.log('Fixing view to bounds:', window.fixedBounds);
+                } else {
+                    // Clear the fixed bounds
+                    window.fixedBounds = null;
+                    console.log('Unfixing view.');
+                }
+
+                // Update button text based on the state
+                fixViewButton.textContent = window.isViewFixed ? 'Unfix View' : 'Fix View';
+
+                // Show notification
+                showNotification(
+                    window.isViewFixed ? 'Map view is now fixed' : 'Map view is now unfixed',
+                    'info',
+                    1500
+                );
+            });
+
+            // Append the button to the dialog
+            dialog.appendChild(fixViewButton);
+        }
+    },
+
     /**
      * Parse ADECK file content and extract storm tracks
      * @param {string} content - Raw text content of the ADECK file

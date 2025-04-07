@@ -2300,7 +2300,11 @@ function displayMarkers(fitBounds = true, modelName = null) {
     // Only fit bounds if explicitly requested
     if (fitBounds && markers.length > 0) {
         const group = new L.featureGroup(markers);
-        map.fitBounds(group.getBounds());
+        // if fixed view don't alter bounds
+        if (!window.isViewFixed){
+            // Fit map to the bounds of the markers
+            map.fitBounds(group.getBounds());
+        }
     }
 }
 
@@ -3797,9 +3801,12 @@ function displayShapefilePoints(geojson) {
         // If we have visible layers, fit bounds
         if (allVisibleLayers.length > 0) {
             const group = L.featureGroup(allVisibleLayers);
-            map.fitBounds(group.getBounds(), {
-                padding: [50, 50] // Add padding around bounds
+            // if fixed bounds, use that
+            if (!window.isViewFixed){
+                map.fitBounds(group.getBounds(), {
+                    padding: [50, 50] // Add padding around bounds
             });
+            }
         }
         
         // Show success notification
@@ -4081,15 +4088,6 @@ function showStormSelectionDialog(storms) {
     header.className = 'dialog-header';
     header.style.cursor = 'move';    
     
-    //// Add header title and controls with new show/hide all button
-    //header.innerHTML = `
-    //    <h3>${cycloneName}</h3>
-    //    <div class="dialog-controls">
-    //        <button id="toggle-all-tracks" class="toggle-tracks-btn" title="Toggle all tracks visibility">Show All</button>
-    //        <button class="minimize-btn" title="Minimize dialog">_</button>
-    //        <button class="close-btn" title="Close dialog">&times;</button>
-    //    </div>
-    //`;
     // Add header title and controls with better positioning
     header.innerHTML = `
     <h3>${cycloneName}</h3>
@@ -4104,6 +4102,47 @@ function showStormSelectionDialog(storms) {
     </div>
     `;
     dialog.appendChild(header);
+
+
+
+
+    // Add the "Fix View" button
+    const fixViewButton = document.createElement('button');
+    fixViewButton.textContent = 'Fix View';
+    fixViewButton.className = 'fix-view-button';
+
+    // Add click event listener to toggle the fix view state
+    fixViewButton.addEventListener('click', function () {
+        window.isViewFixed = !window.isViewFixed;
+
+        if (window.isViewFixed) {
+            // Store the current map bounds
+            window.fixedBounds = map.getBounds();
+            console.log('Fixing view to bounds:', window.fixedBounds);
+        } else {
+            // Clear the fixed bounds
+            window.fixedBounds = null;
+            console.log('Unfixing view.');
+        }
+
+        // Update button text based on the state
+        fixViewButton.textContent = window.isViewFixed ? 'Unfix View' : 'Fix View';
+
+        // Show notification
+        showNotification(
+            window.isViewFixed ? 'Map view is now fixed' : 'Map view is now unfixed',
+            'info',
+            1500
+        );
+    });
+
+    // Append the Fix View button to the dialog
+    dialog.appendChild(fixViewButton);
+
+
+
+
+
     
     // Show cyclone ID if available
     if (firstStorm && firstStorm.cycloneId) {
@@ -4868,7 +4907,10 @@ function displayAdeckTracks(storms, selectedStormId = null, defaultModelsOnly = 
     // Fit bounds to include all tracks if no specific track is selected
     if (!isAnyStormSelected && window.adeckMarkers.length > 0) {
         const group = L.featureGroup(window.adeckMarkers);
-        map.fitBounds(group.getBounds(), { padding: [50, 50] });
+        // only if fix view is not set 
+        if (!window.isViewFixed) {
+            map.fitBounds(group.getBounds(), { padding: [50, 50] });
+        }
     }
     
     // Record that the A-deck dialog was shown

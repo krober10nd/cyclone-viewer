@@ -2455,7 +2455,6 @@ function populatePointSelector() {
     });
 }
 
-// Export data to CSV - allow user to choose filename
 // Export data to CSV - updated to handle both regular tracks and A-deck tracks
 function exportData() {
     try {
@@ -2606,58 +2605,6 @@ function exportData() {
         showNotification('Failed to export data: ' + error.message, 'error');
     }
 }
-
-//function exportData() {
-    //if (!data || data.length === 0) {
-        //showNotification('No data to export', 'warning');
-        //return;
-    //}
-    
-    //try {
-        //console.log("Exporting data...");
-        
-        //// Prompt user for filename
-        //let defaultFilename = `cyclone-track-${new Date().toISOString().substring(0, 10)}`;
-        //let filename = window.prompt('Enter a filename for the CSV export:', defaultFilename);
-        
-        //// If user cancels, abort export
-        //if (filename === null) {
-            //console.log("Export cancelled by user");
-            //return;
-        //}
-        
-        //// Add .csv extension if not present
-        //if (!filename.toLowerCase().endsWith('.csv')) {
-            //filename += '.csv';
-        //}
-        
-        //// Generate CSV content
-        //const csv = Papa.unparse(data);
-        
-        //// Create blob and download link
-        //const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        //const url = URL.createObjectURL(blob);
-        
-        //// Create and trigger download
-        //const link = document.createElement('a');
-        //link.setAttribute('href', url);
-        //link.setAttribute('download', filename);
-        //link.style.display = 'none';
-        //document.body.appendChild(link);
-        //link.click();
-        
-        //// Clean up
-        //setTimeout(() => {
-            //document.body.removeChild(link);
-            //URL.revokeObjectURL(url);
-        //}, 100);
-        
-        //showNotification('Data exported successfully', 'success');
-    //} catch (error) {
-        //console.error('Export error:', error);
-        //showNotification('Failed to export data: ' + error.message, 'error');
-    //}
-//}
 
 // Load CSV file - updated to remove table references
 async function loadCSVFile(file) {
@@ -4920,21 +4867,6 @@ function updateModelDescriptionInDialog(modelName) {
         selectedModelInfo.classList.remove('hidden');
     }
 }
-
-// In function showStormSelectionDialog, add a model description container
-//function showStormSelectionDialog(storms) {
-//    // ...existing code...
-//
-//    // Add model description container right after the header
-//    const modelDescContainer = document.createElement('div');
-//    modelDescContainer.className = 'model-description-container';
-//    modelDescContainer.innerHTML = '<div class="model-description">Select a model track to see its description</div>';
-//    
-//    // Insert after header in the dialog
-//    dialog.insertBefore(modelDescContainer, dialog.querySelector('.dialog-content'));
-//
-//    // ...existing code...
-//}
 
 // Remove ADECK tracks from the map
 function removeAdeckTracks() {

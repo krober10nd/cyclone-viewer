@@ -40,6 +40,7 @@ const MODEL_DESCRIPTIONS = {
     'OFCL': 'National Hurricane Center Official Forecast - The official human-produced forecast issued by NHC',
     'OFCI': 'National Hurricane Center Official Forecast (Interpolated) - Interpolated version of the OFCL forecast',
     'CARQ': 'CARQ/Best Track - Cyclone Analysis and Forecast Position data from NHC',
+    'BEST': 'Official Best Track - Historical record of a tropical cyclone\'s location, maximum winds, central pressure, and size. Produced post-season after thorough analysis of all available data.',
     
     // Consensus Models
     'TVCN': 'Track Variable Consensus - Consensus of dynamical models (AVNO, ECMWF, UKMET, etc.)',
@@ -772,7 +773,7 @@ function toggleFullscreen() {
             document.exitFullscreen();
         } else if (document.webkitExitFullscreen) { /* Safari */
             document.webkitExitFullscreen();
-        } else if (document.msExitFullscreen) { /* IE11 */
+        } else if (document.msExitFullscreen) {
             document.msExitFullscreen();
         }
         
@@ -2405,7 +2406,7 @@ function toggleEditMode() {
         
         // Show the isochrone toggle button when in edit mode
         const isochroneToggle = document.getElementById('toggle-isochrones');
-        if (isochroneToggle) {
+        if (isochronesToggle) {
             isochroneToggle.style.display = 'inline-block';
         }
         
@@ -2416,7 +2417,7 @@ function toggleEditMode() {
         
         // Hide the isochrone toggle button when not in edit mode
         const isochroneToggle = document.getElementById('toggle-isochrones');
-        if (isochroneToggle) {
+        if (isochronesToggle) {
             isochroneToggle.style.display = 'none';
         }
         
@@ -3884,31 +3885,65 @@ async function loadAdeckFile(file) {
         // Show loading indicator
         document.getElementById('loading-indicator').classList.remove('hidden');
         
-        console.log("Loading ADECK file:", file.name);
+        console.log("Loading A/B-DECK file:", file.name);
         
         // Read file content
         const content = await readFileContent(file);
         
-        // Parse ADECK content
-        const result = window.AdeckReader.parseAdeckFile(content);
+        console.log("File content loaded, parsing...");
         
-        if (!result || result.count === 0) {
-            throw new Error("No valid storms found in the ADECK file.");
+        // Check if content is valid
+        if (!content || typeof content !== 'string' || content.trim() === '') {
+            throw new Error("File appears to be empty or invalid");
         }
         
-        console.log(`Found ${result.count} storms in ADECK file`);
+        // Simplified check for B-deck file - only look for BEST in the model column
+        // B-deck files will have "BEST" as the model (5th column)
+        const isBdeck = content.includes(',BEST,') || content.includes(', BEST,');
         
-        // Store storms data GLOBALLY - fixing the scope issue
-        window.adeckStorms = result.storms;  // Change this line to use window.adeckStorms
+        // Parse ADECK/BDECK content with robust error handling
+        let result;
+        try {
+            if (isBdeck) {
+                result = window.AdeckReader.parseBdeckFile(content);
+            } else {
+                result = window.AdeckReader.parseAdeckFile(content);
+            }
+            console.log("Parse result:", result);
+        } catch (parseError) {
+            console.error("Error in parsing file:", parseError);
+            throw new Error(`Failed to parse A/B-DECK file: ${parseError.message}`);
+        }
+        
+        // Ensure result is an object with a storms array
+        if (!result) {
+            console.error("Parser returned", result);
+            result = { storms: [], count: 0 };
+        } else if (!result.storms) {
+            console.error("Parser did not return a valid storms array:", result);
+            // Create a valid result object with an empty storms array
+            result.storms = [];
+            result.count = 0;
+        }
+        
+        if (result.storms.length === 0) {
+            throw new Error("No valid storms found in the A/B-DECK file.");
+        }
+        
+        console.log(`Found ${result.storms.length} storms in A/B-DECK file`);
+        
+        // Store storms data in the global window object
+        window.adeckStorms = result.storms;
         
         // Show storm selection dialog
-        showStormSelectionDialog(window.adeckStorms);  // Use window.adeckStorms
+        showStormSelectionDialog(window.adeckStorms);
         
-        // Show success message
-        showNotification(`Found ${result.count} storms in ADECK file`, 'success', 2000);
+        // Show success message with appropriate file type
+        const fileType = result.isBdeck ? 'B-DECK' : 'A-DECK';
+        showNotification(`Found ${result.storms.length} storm track${result.storms.length > 1 ? 's' : ''} in ${fileType} file`, 'success', 2000);
         
     } catch (error) {
-        console.error("Error loading ADECK file:", error);
+        console.error("Error loading A/B-DECK file:", error);
         showNotification(`Error: ${error.message}`, 'error');
     } finally {
         // Hide loading indicator
@@ -5282,11 +5317,14 @@ if (!window.formatPopupContent) {
         // Use the already implemented getHurricaneCategory function
         const category = isSpecified(point.wind_speed) ? getHurricaneCategory(point.wind_speed) : null;
         
+        // Check if this is a best track (either isBestTrack flag or model is BEST)
+        const isBestTrack = point.isBestTrack || point.model === 'BEST';
+        
         // Handle both ADECK and regular CSV points
         const timeSection = point.tau !== undefined ?
             `<div class="metric">
                 <strong class="var-name">Init Time:</strong> 
-                <span class="var-value">${point.initTime ? formatPointTime(new Date(point.initTime), true) : "Unknown"}</span>
+                <span class="var-value">${isBestTrack ? "N/A" : (point.initTime ? formatPointTime(new Date(point.initTime), true) : "Unknown")}</span>
             </div>
             <div class="metric">
                 <strong class="var-name">Valid Time:</strong> 

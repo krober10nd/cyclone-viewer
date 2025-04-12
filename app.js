@@ -3074,10 +3074,10 @@ document.addEventListener('DOMContentLoaded', function() {
     reopenButton.title = 'Reopen A/B-Deck Track Selector';
     reopenButton.style.display = 'none'; // Initially hidden
     
-    // Add styles to position in top-right corner
+    // Position below the zoom/fullscreen controls in the left side
     reopenButton.style.position = 'absolute';
-    reopenButton.style.top = '10px';
-    reopenButton.style.left = '10px'; // Changed from right to left
+    reopenButton.style.top = '140px'; // Increased from 100px to position further below fullscreen control
+    reopenButton.style.left = '10px';
     reopenButton.style.zIndex = '1000';
     
     // Add click handler

@@ -128,7 +128,7 @@ window.AdeckReader = {
                         number: record.number,
                         model: record.model,
                         // init time is not needed for B-deck
-                        initTime: record.initYYYYMMDDHH,
+                        initTime: initDate, 
                         cycloneId: cycloneId,     // Add formatted cyclone ID (e.g., "aal162004")
                         cycloneName: cycloneName, // Add human-readable name (e.g., "AL16 (2004)")
                         points: []
@@ -149,14 +149,6 @@ window.AdeckReader = {
                 console.error(`Error parsing line ${lineIndex + 1}:`, error, line);
             }
         });
-        
-        // Convert to array and sort storm points by forecast hour (TAU)
-        const storms = Object.values(stormsByModelAndInit).map(storm => {
-            storm.points.sort((a, b) => a.tau - b.tau);
-            return storm;
-        });
-
-        console.log("Storm init times:", storms.map(s => s.initTime));
         
         console.log(`Parsed ${storms.length} forecast tracks with ${processedLines} valid points from B-Deck file`);
         return {
@@ -747,7 +739,7 @@ window.AdeckReader = {
         // Group by initialization date and then by model
         storms.forEach(storm => {
             // Use the init time as the primary key, fallback to a default if not available
-            const dateKey = storm.initTime || 'unknown';
+            const dateKey = storm.initTime || 'BEST_TRACK';
             
             // Create date group if it doesn't exist
             if (!grouped[dateKey]) {
@@ -755,7 +747,7 @@ window.AdeckReader = {
             }
             
             // Create model group under this date if it doesn't exist
-            const modelName = storm.model || 'unknown';
+            const modelName = storm.model || 'BEST_TRACK';
             if (!grouped[dateKey][modelName]) {
                 grouped[dateKey][modelName] = [];
             }
@@ -1517,6 +1509,137 @@ window.AdeckReader = {
         return modelColors[model] || '#AAAAAA';
     }
 };
+
+// Parse B-deck file - integrate with our custom parseBDeck function
+function parseBdeckFile(content) {
+  try {
+    const lines = content.split('\n');
+    const storms = [];
+    let currentStorm = null;
+    
+    // Process each line
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue
+      
+      // Split by comma and trim each field
+      const fields = line.split(',').map(f => f.trim());
+      
+      // Ensure we have enough fields
+      if (fields.length < 20) continue;
+      
+      // Extract basic fields
+      const basin = fields[0];
+      const cycloneNumber = fields[1];
+      const dateTime = fields[2];
+      const recordType = fields[4]; // Should be "BEST" for B-deck
+      
+      // Skip if not a BEST track record
+      if (recordType !== "BEST") continue;
+      
+      // Extract position
+      let latitude = parseFloat(fields[6].replace('N', '').replace('S', '')) / 10.0;
+      if (fields[6].includes('S')) latitude = -latitude;
+      
+      let longitude = parseFloat(fields[7].replace('W', '').replace('E', '')) / 10.0;
+      if (fields[7].includes('W')) longitude = -longitude;
+      
+      // Extract intensity info
+      const windSpeed = parseInt(fields[8]);
+      const pressure = parseInt(fields[9]);
+      const stormType = fields[10];
+      
+      // Check if there's R34 data
+      const hasR34 = fields[11] === "34";
+      
+      // Extract R34 wind radii (in nautical miles)
+      // Replace 0 values with NaN as requested
+      let r34_ne = NaN, r34_se = NaN, r34_sw = NaN, r34_nw = NaN;
+      
+      if (hasR34) {
+        // NE quadrant is field 13
+        const neValue = parseInt(fields[13]) || 0;
+        r34_ne = neValue > 0 ? neValue * 1852 : NaN; // Convert NM to meters, use NaN if 0
+        
+        // SE quadrant is field 14
+        const seValue = parseInt(fields[14]) || 0;
+        r34_se = seValue > 0 ? seValue * 1852 : NaN;
+        
+        // SW quadrant is field 15
+        const swValue = parseInt(fields[15]) || 0;
+        r34_sw = swValue > 0 ? seValue * 1852 : NaN;
+        
+        // NW quadrant is field 16
+        const nwValue = parseInt(fields[16]) || 0;
+        r34_nw = nwValue > 0 ? neValue * 1852 : NaN;
+      }
+      
+      // Extract storm name from field 27 if available
+      let stormName = "";
+      if (fields.length >= 28) {
+        stormName = fields[27];
+      }
+      
+      // Parse date and time
+      const year = parseInt(dateTime.substring(0, 4));
+      const month = parseInt(dateTime.substring(4, 6)) - 1; // JavaScript months are 0-indexed
+      const day = parseInt(dateTime.substring(6, 8));
+      const hour = parseInt(dateTime.substring(8, 10));
+      
+      // Create point object with all extracted data including R34 wind radii
+      const point = {
+        latitude,
+        longitude,
+        wind_speed: windSpeed * 0.514444, // Convert knots to m/s
+        mslp: pressure,
+        stormType,
+        r34_ne,
+        r34_se,
+        r34_sw,
+        r34_nw,
+        year_utc: year,
+        month_utc: month + 1, // Store as 1-indexed
+        day_utc: day,
+        hour_utc: hour,
+        minute_utc: 0,
+        isBestTrack: true,
+        model: "BEST"
+      };
+      
+      // Generate cyclone ID and check if it's a new storm
+      const cycloneId = `${basin}${cycloneNumber}${year}`;
+      
+      if (!currentStorm || currentStorm.id !== cycloneId) {
+        // Start a new storm
+        currentStorm = {
+          id: cycloneId,
+          cycloneId: cycloneId,
+          cycloneName: stormName,
+          basin: basin,
+          points: [point]
+        };
+        storms.push(currentStorm);
+      } else {
+        // Add point to existing storm
+        currentStorm.points.push(point);
+        
+        // Update storm name if it was empty before
+        if (!currentStorm.cycloneName && stormName) {
+          currentStorm.cycloneName = stormName;
+        }
+      }
+    }
+    
+    return { storms, isBdeck: true, count: storms.length };
+  } catch (error) {
+    console.error("Error parsing B-deck file:", error);
+    return { storms: [], isBdeck: true, count: 0 };
+  }
+}
+
+// Export the function
+window.AdeckReader = window.AdeckReader || {};
+window.AdeckReader.parseBdeckFile = parseBdeckFile;
 
 // Initialize when DOM is fully loaded
 document.addEventListener('DOMContentLoaded', function() {

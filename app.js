@@ -2361,16 +2361,15 @@ function selectPoint(index) {
         showIsochrones(index);
     }
     
-    // Only display storm attributes in view mode (NOT in edit mode)
+    // Display storm attributes, including R34 wedges, for ADECK points
     if (!editMode) {
         clearStormVisualizations(index);
-        displayStormAttributes(index);
-        
+        displayStormAttributes(index); // This will now include R34 wedges
+
         // Make sure the floating dialog is created or updated when selecting a point
         if (floatingDialog && floatingDialog.pointIndex !== index) {
             removeFloatingDialog();
         }
-        
         if (!floatingDialog) {
             createFloatingDialog(index);
         }
@@ -3071,14 +3070,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const reopenButton = document.createElement('button');
     reopenButton.id = 'reopen-adeck-dialog';
     reopenButton.className = 'reopen-adeck-btn';
-    reopenButton.innerHTML = '<i class="fas fa-hurricane"></i> Show A-Deck Selector';
-    reopenButton.title = 'Reopen A-Deck Track Selector';
+    reopenButton.innerHTML = '<i class="fas fa-hurricane"></i> Show A/B-Deck Selector';
+    reopenButton.title = 'Reopen A/B-Deck Track Selector';
     reopenButton.style.display = 'none'; // Initially hidden
     
     // Add styles to position in top-right corner
     reopenButton.style.position = 'absolute';
     reopenButton.style.top = '10px';
-    reopenButton.style.right = '10px';
+    reopenButton.style.left = '10px'; // Changed from right to left
     reopenButton.style.zIndex = '1000';
     
     // Add click handler
@@ -3197,13 +3196,11 @@ function updateAllDisplayedUnits() {
     updateDisplayedValues();
 }
 
-// Update the map legend title with the current units
+// Update the map legend title with the current units - Modified to check if element exists first
 function updateMapLegendUnits() {
-    const legendTitle = document.querySelector('.map-legend .legend-title');
-    if (legendTitle) {
-        const unitLabel = unitSystem === 'metric' ? 'km' : 'mi';
-        legendTitle.textContent = `Storm Size (${unitLabel})`;
-    }
+    // Since the static legend has been removed, this function is now a no-op
+    // Keeping it to avoid breaking any code that calls it
+    return;
 }
 
 // Update any open popups with new unit system
@@ -3937,7 +3934,7 @@ async function loadAdeckFile(file) {
         
         // Show storm selection dialog
         showStormSelectionDialog(window.adeckStorms);
-        
+
         // Show success message with appropriate file type
         const fileType = result.isBdeck ? 'B-DECK' : 'A-DECK';
         showNotification(`Found ${result.storms.length} storm track${result.storms.length > 1 ? 's' : ''} in ${fileType} file`, 'success', 2000);
@@ -5516,4 +5513,76 @@ function createDeselectAllButton() {
         }
     `;
     document.head.appendChild(style);
+}
+
+function displayBdeckTrack(storm) {
+    // Clear existing markers and visualizations
+    markers.forEach(marker => map.removeLayer(marker));
+    markers = [];
+    clearAllStormVisualizations();
+
+    // Iterate through each point in the storm track
+    storm.points.forEach((point, index) => {
+        // Add a marker for each point
+        const marker = L.marker([point.latitude, point.longitude], {
+            title: `Point ${index}`,
+            icon: L.divIcon({
+                className: 'bdeck-marker',
+                html: `<div style="background-color: #0066cc; width: 10px; height: 10px; border-radius: 50%;"></div>`,
+                iconSize: [10, 10],
+                iconAnchor: [5, 5]
+            })
+        });
+
+        // Add click event to display storm attributes
+        marker.on('click', () => {
+            clearAllStormVisualizations();
+            displayStormAttributes(index);
+        });
+
+        marker.addTo(map);
+        markers.push(marker);
+    });
+
+    // Draw a polyline for the track
+    const trackLine = L.polyline(
+        storm.points.map(point => [point.latitude, point.longitude]),
+        {
+            color: '#0066cc',
+            weight: 2,
+            opacity: 0.8
+        }
+    ).addTo(map);
+
+    // Fit the map to the track bounds
+    const bounds = L.latLngBounds(storm.points.map(point => [point.latitude, point.longitude]));
+    map.fitBounds(bounds);
+}
+
+function loadBdeckTrack(bdeckData) {
+    // Parse the B-deck data into a storm object
+    const storm = parseBdeckData(bdeckData);
+
+    // Display the B-deck track on the map
+    displayBdeckTrack(storm);
+}
+
+function parseBdeckData(bdeckData) {
+    // Parse the B-deck data into a structured storm object
+    const lines = bdeckData.split('\n').filter(line => line.trim());
+    const points = lines.map(line => {
+        const fields = line.split(',').map(field => field.trim());
+        return {
+            latitude: parseFloat(fields[6]) / 10, // Convert to decimal degrees
+            longitude: -parseFloat(fields[7]) / 10, // Convert to decimal degrees
+            windSpeed: parseInt(fields[8], 10),
+            pressure: parseInt(fields[9], 10),
+            r34_ne: parseInt(fields[13], 10) || NaN,
+            r34_se: parseInt(fields[14], 10) || NaN,
+            r34_sw: parseInt(fields[15], 10) || NaN,
+            r34_nw: parseInt(fields[16], 10) || NaN
+        };
+    });
+
+    return { points };
 }

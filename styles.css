@@ -3515,3 +3515,28 @@ body.dark-mode .datetime-label div,
 .fix-view-button:hover {
     background-color: #0056b3;
 }
+
+/* Add styles for minimized dialog state */
+.storm-selection-dialog.minimized {
+    width: auto !important;
+    height: auto !important;
+    max-height: 40px;
+    overflow: hidden;
+    opacity: 0.8;
+    transition: opacity 0.3s;
+}
+
+.storm-selection-dialog.minimized:hover {
+    opacity: 1;
+}
+
+.storm-selection-dialog.minimized .dialog-header {
+    margin-bottom: 0;
+}
+
+/* Make sure the reopen button doesn't conflict with other controls */
+.reopen-adeck-btn {
+    margin: 5px;
+    z-index: 999;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+}

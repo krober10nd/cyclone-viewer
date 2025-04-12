@@ -1,6 +1,6 @@
 /**
  * ADECK File Reader
- * Parses ADECK format (Automated Tropical Cyclone Forecast) files and converts to a format usable by the cyclone viewer
+ * Parses ADECK/BDECK format (Automated Tropical Cyclone Forecast) files and converts to a format usable by the cyclone viewer
  */
 
 window.AdeckReader = {

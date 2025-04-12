@@ -740,14 +740,25 @@ function addFullscreenControl() {
 function toggleFullscreen() {
     const mapContainer = document.getElementById('map-container');
     
-    // Store dialog position if it exists, relative to window
-    let dialogPosition = null;
+    // Store dialog positions for all visible dialogs
+    const dialogPositions = {};
+    
+    // Track floating dialog position if it exists
     if (floatingDialog) {
         const dialogEl = floatingDialog.element;
-        dialogPosition = {
+        dialogPositions.floatingDialog = {
             left: dialogEl.offsetLeft,
             top: dialogEl.offsetTop,
             width: dialogEl.offsetWidth
+        };
+    }
+    
+    // Track ADECK dialog position if it exists
+    if (adeckStormSelectionDialog) {
+        dialogPositions.adeckDialog = {
+            left: adeckStormSelectionDialog.offsetLeft,
+            top: adeckStormSelectionDialog.offsetTop,
+            width: adeckStormSelectionDialog.offsetWidth
         };
     }
     
@@ -763,10 +774,15 @@ function toggleFullscreen() {
         
         mapContainer.classList.add('fullscreen-mode');
         
-        // Reposition floating dialog for fullscreen mode
-        if (floatingDialog) {
-            setTimeout(() => repositionDialogForFullscreen(true, dialogPosition), 100);
-        }
+        // Reposition dialogs for fullscreen mode
+        setTimeout(() => {
+            if (floatingDialog) {
+                repositionDialogForFullscreen(true, dialogPositions.floatingDialog, floatingDialog.element);
+            }
+            if (adeckStormSelectionDialog) {
+                repositionDialogForFullscreen(true, dialogPositions.adeckDialog, adeckStormSelectionDialog);
+            }
+        }, 100);
     } else {
         // Exit fullscreen
         if (document.exitFullscreen) {
@@ -777,34 +793,58 @@ function toggleFullscreen() {
             document.msExitFullscreen();
         }
         
-        // Reposition floating dialog for normal mode
-        if (floatingDialog) {
-            setTimeout(() => repositionDialogForFullscreen(false, dialogPosition), 100);
-        }
+        // Reposition dialogs for normal mode
+        setTimeout(() => {
+            if (floatingDialog) {
+                repositionDialogForFullscreen(false, dialogPositions.floatingDialog, floatingDialog.element);
+            }
+            if (adeckStormSelectionDialog) {
+                repositionDialogForFullscreen(false, dialogPositions.adeckDialog, adeckStormSelectionDialog);
+            }
+        }, 100);
     }
 }
 
 // Reposition dialog when entering/exiting fullscreen
-function repositionDialogForFullscreen(isFullscreen, oldPosition) {
-    if (!floatingDialog || !floatingDialog.element) return;
+function repositionDialogForFullscreen(isFullscreen, oldPosition, dialogElement) {
+    if (!dialogElement) return;
     
     const mapContainer = document.getElementById('map-container');
     const mapRect = mapContainer.getBoundingClientRect();
     
     if (isFullscreen) {
-        // When entering fullscreen, position relative to viewport on the left side
-        floatingDialog.element.style.position = 'fixed';
-        floatingDialog.element.style.left = '20px'; // Position on left side
-        floatingDialog.element.style.top = '20px';
-    } else {
-        // When exiting, restore previous position or calculate new one on the left
-        floatingDialog.element.style.position = 'absolute';
+        // When entering fullscreen, position relative to viewport 
+        // and ensure proper z-index to be visible in fullscreen mode
+        dialogElement.style.position = 'fixed';
+        dialogElement.style.zIndex = '10000'; // Very high z-index to be above fullscreen element
+        
+        // Use similar left/top positioning as before
         if (oldPosition) {
-            floatingDialog.element.style.left = oldPosition.left + 'px';
-            floatingDialog.element.style.top = oldPosition.top + 'px';
+            // Use percentage-based positioning for better scaling in fullscreen
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const leftPercent = (oldPosition.left / viewportWidth) * 100;
+            const topPercent = (oldPosition.top / viewportHeight) * 100;
+            
+            // Keep dialog within viewport bounds
+            dialogElement.style.left = `${Math.min(Math.max(leftPercent, 0), 90)}%`;
+            dialogElement.style.top = `${Math.min(Math.max(topPercent, 0), 80)}%`;
         } else {
-            floatingDialog.element.style.left = (mapRect.left + 20) + 'px'; // Position on left
-            floatingDialog.element.style.top = (mapRect.top + 20) + 'px';
+            // Default position in fullscreen if no previous position
+            dialogElement.style.left = '20px';
+            dialogElement.style.top = '20px';
+        }
+    } else {
+        // When exiting, restore previous position or calculate new one
+        dialogElement.style.position = 'absolute';
+        dialogElement.style.zIndex = '1000'; // Reset to normal z-index
+        
+        if (oldPosition) {
+            dialogElement.style.left = oldPosition.left + 'px';
+            dialogElement.style.top = oldPosition.top + 'px';
+        } else {
+            dialogElement.style.left = (mapRect.left + 20) + 'px';
+            dialogElement.style.top = (mapRect.top + 20) + 'px';
         }
     }
 }
@@ -828,19 +868,30 @@ function setupFullscreenHandler() {
             // Resize the map to ensure it renders correctly
             map.invalidateSize();
             
-            // Reposition dialog if it exists
+            // Reposition dialogs if they exist
             if (floatingDialog) {
-                repositionDialogForFullscreen(false);
+                repositionDialogForFullscreen(false, null, floatingDialog.element);
+            }
+            if (adeckStormSelectionDialog) {
+                repositionDialogForFullscreen(false, null, adeckStormSelectionDialog);
             }
         } else {
             // Entered fullscreen
             // Resize the map to ensure it renders correctly
             map.invalidateSize();
             
-            // Reposition dialog if it exists
+            // Reposition dialogs for fullscreen mode
             if (floatingDialog) {
-                repositionDialogForFullscreen(true);
+                repositionDialogForFullscreen(true, null, floatingDialog.element);
             }
+            if (adeckStormSelectionDialog) {
+                repositionDialogForFullscreen(true, null, adeckStormSelectionDialog);
+            }
+            
+            // Ensure all dialogs have high enough z-index
+            document.querySelectorAll('.storm-selection-dialog, #floating-dialog').forEach(dialog => {
+                dialog.style.zIndex = '10000'; // High z-index for fullscreen visibility
+            });
         }
     }
 }
@@ -1469,7 +1520,9 @@ function createFloatingDialog(pointIndex) {
     dialogContainer.id = 'floating-dialog';
     dialogContainer.classList.remove('hidden');
     dialogContainer.classList.add('enhanced-dialog');
-    dialogContainer.style.zIndex = '1500'; // Ensure high z-index
+    
+    // Set appropriate z-index based on fullscreen state
+    dialogContainer.style.zIndex = document.fullscreenElement ? '10000' : '1500';
     
     // Add semi-transparent slider thumb styles
     const sliderStyles = document.createElement('style');
@@ -4419,6 +4472,9 @@ function showStormSelectionDialog(storms) {
     dialog.style.maxWidth = '35%'; // Limit width
     dialog.style.minWidth = '300px'; // Ensure minimum width
     
+    // Set a high z-index to ensure visibility in fullscreen mode
+    dialog.style.zIndex = document.fullscreenElement ? '10000' : '1000';
+    
     // Store reference to dialog
     adeckStormSelectionDialog = dialog;
     
@@ -5586,3 +5642,425 @@ function parseBdeckData(bdeckData) {
 
     return { points };
 }
+
+// Document ready event handling
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize map
+    initializeMap();
+    
+    // Setup fullscreen handler
+    setupFullscreenHandler();
+    
+    // Add hurricane category legend
+    addCategoryLegend();
+    
+    // Ensure map fills available space
+    adjustMapSize();
+    
+    // Set initial mode status text based on editMode value
+    const modeStatus = document.getElementById('mode-status');
+    if (modeStatus) {
+        modeStatus.textContent = editMode ? 'Edit Cyclone Parameters' : 'Move Cyclone Position';
+        modeStatus.className = editMode ? 'edit-mode' : 'view-mode';
+    }
+    
+    // Make unit system and conversion factors available globally for popup templates
+    window.unitSystem = unitSystem;
+    window.UNIT_CONVERSIONS = UNIT_CONVERSIONS;
+    window.NM_TO_KM = NM_TO_KM;
+    
+    // Add resize handler
+    window.addEventListener('resize', adjustMapSize);
+    
+    // File input direct handling
+    const csvFileInput = document.getElementById('csv-file');
+    if (csvFileInput) {
+        csvFileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                loadCSVFile(this.files[0]);
+            }
+        });
+    } else {
+        console.error("Element 'csv-file' not found in the DOM");
+    }
+    
+    // File upload button (as backup)
+    const uploadBtn = document.getElementById('upload-btn');
+    if (uploadBtn) {
+        uploadBtn.addEventListener('click', function() {
+            const fileInput = document.getElementById('csv-file');
+            if (fileInput && fileInput.files.length > 0) {
+                loadCSVFile(fileInput.files[0]);
+            } else {
+                showNotification('Please select a CSV file first.', 'warning');
+            }
+        });
+    }
+    
+    // Toggle edit mode button
+    const toggleEditModeBtn = document.getElementById('toggle-edit-mode');
+    if (toggleEditModeBtn) {
+        toggleEditModeBtn.addEventListener('click', toggleEditMode);
+    }
+    
+    // Add event listener for toggle-isochrones button
+    const toggleIsochronesBtn = document.getElementById('toggle-isochrones');
+    if (toggleIsochronesBtn) {
+        toggleIsochronesBtn.addEventListener('click', toggleIsochrones);
+        console.log("Attached event listener to isochrones toggle button");
+    } else {
+        console.warn("Could not find toggle-isochrones button");
+    }
+    
+    // Update point button
+    const updatePointBtn = document.getElementById('update-point-btn');
+    if (updatePointBtn) {
+        updatePointBtn.addEventListener('click', function() {
+            if (selectedPoint !== null) {
+                const editLat = document.getElementById('edit-lat');
+                const editLng = document.getElementById('edit-lng');
+                
+                if (!editLat || !editLng) {
+                    console.error("Edit coordinate inputs not found");
+                    return;
+                }
+                
+                const lat = parseFloat(editLat.value);
+                const lng = parseFloat(editLng.value);
+                
+                if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {
+                    showNotification('Please enter valid coordinates.', 'warning');
+                    return;
+                }
+                
+                // Update data
+                data[selectedPoint].latitude = lat;
+                data[selectedPoint].longitude = lng;
+                
+                // Update marker position
+                markers[selectedPoint].setLatLng([lat, lng]);
+                
+                // Update table if table-container exists
+                const tableContainer = document.getElementById('table-container');
+                if (tableContainer) {
+                    createTable(data, 'table-container');
+                }
+                
+                showNotification('Point updated successfully.', 'success');
+            }
+        });
+    }
+    
+    // Export button
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportData);
+    }
+    
+    // Point selector change
+    const pointSelect = document.getElementById('point-select');
+    if (pointSelect) {
+        pointSelect.addEventListener('change', function() {
+            selectPoint(parseInt(this.value));
+        });
+    } else {
+        console.warn("Element 'point-select' not found - this might be expected if the selector is created dynamically later");
+    }
+    
+    // Enable drag and drop for all file types (CSV, shapefile, ADECK)
+    const dropZone = document.getElementById('drop-zone');
+    if (dropZone) {
+        // Add click handler to the entire drop-zone
+        dropZone.addEventListener('click', function(e) {
+            // Don't handle clicks on the button itself (let the button's handler work)
+            if (e.target.id !== 'upload-btn' && !e.target.closest('#upload-btn')) {
+                // Trigger the file input click
+                const fileInput = document.getElementById('csv-file');
+                if (fileInput) {
+                    fileInput.click();
+                }
+            }
+        });
+        
+        // Prevent default behaviors for all drag events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        // Add highlight class on dragenter/dragover
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+        
+        // Remove highlight class on dragleave/drop
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            dropZone.classList.add('highlight');
+        }
+        
+        function unhighlight() {
+            dropZone.classList.remove('highlight');
+        }
+        
+        // Unified file drop handler for CSV, shapefiles, and ADECK files
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length === 0) return;
+            
+            // Get file extension to determine how to process
+            const file = files[0];
+            const fileName = file.name.toLowerCase();
+            const extension = fileName.split('.').pop();
+            
+            // Check for shapefile types
+            if (['shp', 'dbf', 'prj', 'zip', 'json', 'geojson', 'kml'].includes(extension)) {
+                // Update loading count
+                shapefileCount = files.length;
+                updateLoadingCount(shapefileCount);
+                
+                // Process shapefile
+                loadShapefile(files);
+            } 
+            // Check for ADECK file types
+            else if (['dat', 'txt', 'adeck'].includes(extension)) {
+                loadAdeckFile(file);
+            }
+            // Handle CSV file
+            else if (extension === 'csv' || file.type === 'text/csv') {
+                document.getElementById('csv-file').files = dt.files;
+                loadCSVFile(file);
+            } 
+            else {
+                showNotification('Please drop a valid CSV, ADECK, or shapefile', 'warning');
+            }
+        });
+    }
+    
+    // Add event handler for update-storm-btn if it exists
+    const updateStormBtn = document.getElementById('update-storm-btn');
+    if (updateStormBtn) {
+        updateStormBtn.addEventListener('click', function() {
+            if (selectedPoint !== null) {
+                const stormAttrs = ['rmw', 'r34_ne', 'r34_se', 'r34_sw', 'r34_nw', 'roci'];
+                
+                // Update data from form inputs
+                stormAttrs.forEach(attr => {
+                    const input = document.getElementById(`edit-${attr}`);
+                    if (input) {
+                        data[selectedPoint][attr] = parseInt(input.value) || 0;
+                    }
+                });
+                
+                // Redraw the visualization
+                clearStormVisualizations(selectedPoint);
+                displayStormAttributes(selectedPoint);
+                
+                showNotification('Storm attributes updated successfully.', 'success');
+            }
+        });
+    }
+    
+    // Handle document clicks to close floating dialog when clicking outside
+    document.addEventListener('click', function(e) {
+        if (floatingDialog) {
+            // Check if click is outside the dialog
+            if (!floatingDialog.element.contains(e.target) && 
+                !e.target.closest('.leaflet-marker-icon') && 
+                !e.target.closest('.hurricane-marker')) {
+                removeFloatingDialog();
+                
+                // Don't reset appearance when in Edit Cyclone Parameters mode (not edit mode)
+                // This keeps storm visualizations visible when clicking elsewhere on the map
+                if (editMode) {
+                    resetPointAppearance();
+                }
+            }
+        }
+    });
+
+    // Make sure map container clicks don't remove visualizations in parameter edit mode
+    const mapContainer = document.getElementById('map'); 
+    if (mapContainer) {
+        mapContainer.addEventListener('click', function(e) {
+            // If we're in parameter edit mode (not editMode) and not clicking on a marker,
+            // prevent clearing storm visualizations
+            if (!editMode && selectedPoint !== null && 
+                !e.target.closest('.leaflet-marker-icon') && 
+                !e.target.closest('.hurricane-marker')) {
+                // Stop event propagation to prevent dialog removal
+                e.stopPropagation();
+                
+                // If the floating dialog was open, just close it without resetting appearance
+                if (floatingDialog) {
+                    removeFloatingDialog();
+                }
+            }
+        });
+    }
+    
+    // Add debug message to confirm initialization completed
+    console.log("DOM fully loaded and all event listeners attached");
+
+    // Add event listener for units toggle button - with debugging
+    const toggleUnitsBtn = document.getElementById('toggle-units');
+    if (toggleUnitsBtn) {
+        console.log("Found toggle units button:", toggleUnitsBtn);
+        toggleUnitsBtn.addEventListener('click', function() {
+            console.log("Units button clicked");
+            toggleUnits();
+        });
+    } else {
+        console.error("Could not find toggle-units button!");
+    }
+
+    // Set up scale selector
+    const scaleSelect = document.getElementById('scale-select');
+    if (scaleSelect) {
+        // Set initial selected value based on current scale
+        scaleSelect.value = currentScale;
+        
+        // Add event listener
+        scaleSelect.addEventListener('change', function() {
+            currentScale = this.value;
+            
+            // Update all markers to reflect new scale
+            displayMarkers();
+            
+            // Update hurricane legend
+            addCategoryLegend();
+            
+            // Show feedback to user
+            const scaleName = currentScale === 'saffir-simpson' ? 'Saffir-Simpson' : 'Australian BoM';
+            showNotification(`Switched to ${scaleName} scale`, 'info', 1500);
+        });
+    }
+
+    // Set up shapefile input handling
+    const shapefileInput = document.getElementById('shapefile-input');
+    if (shapefileInput) {
+        shapefileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                // Update loading count
+                shapefileCount = this.files.length;
+                updateLoadingCount(shapefileCount);
+                
+                // Process files
+                loadShapefile(this.files);
+            }
+        });
+    }
+    
+    // Shapefile upload button
+    const shapefileBtn = document.getElementById('shapefile-btn');
+    if (shapefileBtn) {
+        shapefileBtn.addEventListener('click', function() {
+            const input = document.getElementById('shapefile-input');
+            if (input) {
+                input.click(); // Trigger file input dialog
+            }
+        });
+    }
+
+    // ADECK file input handler
+    const adeckFileInput = document.getElementById('adeck-file');
+    if (adeckFileInput) {
+        adeckFileInput.addEventListener('change', handleAdeckFileSelect);
+    }
+
+    // ADECK upload button handler
+    const adeckUploadBtn = document.getElementById('adeck-upload-btn');
+    if (adeckUploadBtn) {
+        adeckUploadBtn.addEventListener('click', function() {
+            const fileInput = document.getElementById('adeck-file');
+            if (fileInput) {
+                fileInput.click();
+            }
+        });
+    }
+
+    // Create a reopen button when closing the dialog
+    const reopenButton = document.createElement('button');
+    reopenButton.id = 'reopen-adeck-dialog';
+    reopenButton.className = 'reopen-adeck-btn';
+    reopenButton.innerHTML = '<i class="fas fa-hurricane"></i> Show A/B-Deck Selector';
+    reopenButton.title = 'Reopen A/B-Deck Track Selector';
+    reopenButton.style.display = 'none'; // Initially hidden
+    
+    // Position below the zoom/fullscreen controls in the left side
+    reopenButton.style.position = 'absolute';
+    reopenButton.style.top = '140px'; // Increased from 100px to position further below fullscreen control
+    reopenButton.style.left = '10px';
+    reopenButton.style.zIndex = '1000';
+    
+    // Add click handler
+    reopenButton.addEventListener('click', reopenAdeckDialog);
+    
+    // Add to map container
+    const mapContainerEl = document.getElementById('map-container'); // Renamed to avoid conflict
+    if (mapContainerEl) {
+        mapContainerEl.appendChild(reopenButton);
+    }
+    
+    // Create a mutation observer to watch for dialog removal
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.removedNodes.length > 0) {
+                // Check if the storm selection dialog was removed
+                for (let i = 0; i < mutation.removedNodes.length; i++) {
+                    const node = mutation.removedNodes[i];
+                    if (node.id === 'adeck-storm-selection') {
+                        // Show the reopen button if we have A-deck data
+                        if (window.adeckStorms && window.adeckStorms.length > 0) {
+                            reopenButton.style.display = 'block';
+                            adeckDialogWasShown = true;
+                        }
+                    }
+                }
+            }
+        });
+    });
+    
+    // Start observing the document body for removed nodes
+    observer.observe(document.body, { childList: true });
+    
+    // Create a style element for the reopen button
+    const style = document.createElement('style');
+    style.textContent = `
+        .reopen-adeck-btn {
+            background-color: rgba(40, 40, 40, 0.8);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        .reopen-adeck-btn:hover {
+            background-color: rgba(60, 60, 60, 0.9);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .reopen-adeck-btn i {
+            font-size: 16px;
+        }
+    `;
+    document.head.appendChild(style);
+});

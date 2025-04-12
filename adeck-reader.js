@@ -47,118 +47,6 @@ window.AdeckReader = {
     },
 
     /**
-     * Parse Bdeck file content and extract the single 
-     * best track 
-     * @param {string} content - Raw text content of the Bdeck file
-     * @returns {Object} Object containing storm tracks and metadata
-     */
-    parseBdeckFile: function(content) {
-        console.log("Parsing Bdeck file..."); 
-        // Split content into lines and filter out empty lines and comments
-        const lines = content.split(/\r?\n/).filter(line => {
-            const trimmed = line.trim();
-            return trimmed.length > 0 && !trimmed.startsWith('#');
-        });
-        // return if the file is empty
-        if (lines.length === 0) {
-            console.error("Bdeck file is empty or contains only comments");
-            return { storms: [], count: 0 };
-        }
-        // define the column map 
-        let columnMap = this.getDefaultColumnMap();
-        
-        // For storing all storms by their unique ID
-        const stormsByModelAndInit = {};
-        
-        // Process each line
-        let processedLines = 0;
-    
-        // parse the lines to extract the single storm 
-        lines.forEach((line, lineIndex) => {
-            try {
-                const parts = line.split(',').map(part => part.trim());
-                
-                // Skip lines that don't have enough parts
-                if (parts.length < Math.max(columnMap.lat, columnMap.lon, columnMap.model) + 1) {
-                    console.warn(`Line ${lineIndex + 1} has insufficient data (${parts.length} columns)`);
-                    return;
-                }
-                
-                // Extract values using column map
-                const record = this.extractValuesFromLine(parts, columnMap);
-                
-                // Skip if critical data is missing
-                if (!record || 
-                    !record.basin || 
-                    !record.number || 
-                    !record.initYYYYMMDDHH || 
-                    !record.model || 
-                    record.latitude === undefined || 
-                    record.longitude === undefined) {
-                    console.warn(`Skipping line ${lineIndex + 1} due to missing critical data`);
-                    return;
-                }
-                
-                // Create a storm ID based on basin, cyclone number, and year
-                const year = record.initYYYYMMDDHH.substring(0, 4);
-                const stormId = `${record.basin}${record.number}${year}`;
-                
-                // Format official cyclone identifier (e.g., "aal162004")
-                const cycloneId = this.formatCycloneId(record.basin, record.number, year);
-                
-                // Create a unique model/init time key
-                // For the B-deck each row will have a unique initialization time 
-                // but its only one storm so drop the model and init time
-                const modelInitKey = `${stormId}`;
-                
-                // Get or create storm object
-                if (!stormsByModelAndInit[modelInitKey]) {
-                    // Format initialization time nicely for display
-                    const initDate = this.formatDateTime(record.initYYYYMMDDHH);
-                    
-                    // Create a human-readable cyclone name
-                    const cycloneName = this.formatCycloneName(record.basin, record.number, year);
-                    
-                    stormsByModelAndInit[modelInitKey] = {
-                        id: modelInitKey,
-                        stormId: stormId,
-                        name: `BEST`,
-                        basin: record.basin,
-                        year: parseInt(year),
-                        number: record.number,
-                        model: record.model,
-                        // init time is not needed for B-deck
-                        initTime: initDate, 
-                        cycloneId: cycloneId,     // Add formatted cyclone ID (e.g., "aal162004")
-                        cycloneName: cycloneName, // Add human-readable name (e.g., "AL16 (2004)")
-                        points: []
-                    };
-                }
-                
-                // Convert BDECK point to cyclone viewer format
-                const point = this.convertPointFormat(record);
-                
-                // Add point to storm only if it has valid coordinates
-                if (point && !isNaN(point.latitude) && !isNaN(point.longitude)) {
-                    stormsByModelAndInit[modelInitKey].points.push(point);
-                    processedLines++;
-                } else {
-                    console.warn(`Skipping point with invalid coordinates: lat=${point?.latitude}, lon=${point?.longitude}`);
-                }
-            } catch (error) {
-                console.error(`Error parsing line ${lineIndex + 1}:`, error, line);
-            }
-        });
-        
-        console.log(`Parsed ${storms.length} forecast tracks with ${processedLines} valid points from B-Deck file`);
-        return {
-            storms: storms,
-            count: storms.length
-        };
-    },
-
-        
-    /**
      * Parse ADECK file content and extract storm tracks
      * @param {string} content - Raw text content of the ADECK file
      * @returns {Object} Object containing storm tracks and metadata
@@ -1571,7 +1459,7 @@ function parseBdeckFile(content) {
         
         // NW quadrant is field 16
         const nwValue = parseInt(fields[16]) || 0;
-        r34_nw = nwValue > 0 ? neValue * 1852 : NaN;
+        r34_nw = neValue > 0 ? neValue * 1852 : NaN;
       }
       
       // Extract storm name from field 27 if available

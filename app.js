@@ -2351,6 +2351,9 @@ function displayMarkers(fitBounds = true, modelName = null) {
         markers.push(marker);
     });
 
+    // Update date labels after creating markers
+    updateDateLabels();
+
     // Only fit bounds if explicitly requested
     if (fitBounds && markers.length > 0) {
         const group = new L.featureGroup(markers);
@@ -5657,6 +5660,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Ensure map fills available space
     adjustMapSize();
     
+    // Make sure we have explicit event handlers for map zoom and movement
+    map.on('zoomend', function() {
+        console.log('Map zoom changed to', map.getZoom());
+        updateDateLabels();
+    });
+    
+    map.on('moveend', function() {
+        console.log('Map moved');
+        updateDateLabels();
+    });
+    
     // Set initial mode status text based on editMode value
     const modeStatus = document.getElementById('mode-status');
     if (modeStatus) {
@@ -5770,18 +5784,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Enable drag and drop for all file types (CSV, shapefile, ADECK)
     const dropZone = document.getElementById('drop-zone');
     if (dropZone) {
-        // Add click handler to the entire drop-zone
-        dropZone.addEventListener('click', function(e) {
-            // Don't handle clicks on the button itself (let the button's handler work)
-            if (e.target.id !== 'upload-btn' && !e.target.closest('#upload-btn')) {
-                // Trigger the file input click
-                const fileInput = document.getElementById('csv-file');
-                if (fileInput) {
-                    fileInput.click();
-                }
-            }
-        });
-        
         // Prevent default behaviors for all drag events
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dropZone.addEventListener(eventName, preventDefaults, false);
@@ -6063,4 +6065,2573 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     `;
     document.head.appendChild(style);
+});
+
+// Make sure the map fills the available space - updated without bottom panel
+function adjustMapSize() {
+    const mapContainer = document.getElementById('map-container');
+    const header = document.querySelector('header');
+    
+    if (!mapContainer || !header) return;
+    
+    const availableHeight = window.innerHeight - header.offsetHeight - 24; // Account for margins/padding
+    mapContainer.style.height = `${availableHeight}px`;
+    
+    // Resize map to ensure it renders correctly
+    if (map) {
+        map.invalidateSize();
+    }
+}
+
+// Function to toggle between metric and imperial units
+function toggleUnits() {
+    console.log("Toggle units called");
+    unitSystem = unitSystem === 'metric' ? 'imperial' : 'metric';
+    console.log(`Switched to ${unitSystem} units`);
+    
+    // Immediately update window.unitSystem so popup template can access it
+    window.unitSystem = unitSystem;
+    
+    // Update UI elements to reflect new unit system
+    updateAllDisplayedUnits();
+    
+    // Show feedback to user
+    const unitName = unitSystem === 'metric' ? 'Metric' : 'Imperial';
+    showNotification(`Switched to ${unitName} units`, 'info', 1500);
+}
+
+// Update all displayed units across the application
+function updateAllDisplayedUnits() {
+    // Update the map legend title
+    updateMapLegendUnits();
+    
+    // Update hurricane legend to show correct wind speed units
+    addCategoryLegend();
+    
+    // Update marker popups if any are open
+    updateOpenPopups();
+    
+    // Update floating dialog if it exists
+    if (floatingDialog) {
+        // Re-create the dialog with updated units
+        const currentPointIndex = floatingDialog.pointIndex;
+        removeFloatingDialog();
+        createFloatingDialog(currentPointIndex);
+    }
+    
+    // Update any other displayed values
+    updateDisplayedValues();
+}
+
+// Update the map legend title with the current units - Modified to check if element exists first
+function updateMapLegendUnits() {
+    // Since the static legend has been removed, this function is now a no-op
+    // Keeping it to avoid breaking any code that calls it
+    return;
+}
+
+// Update any open popups with new unit system
+function updateOpenPopups() {
+    console.log("Updating open popups to use", unitSystem, "units");
+    
+    // Force update window.unitSystem to ensure popup template has access
+    window.unitSystem = unitSystem;
+    
+    // Update any visible popups by completely regenerating their content
+    markers.forEach(marker => {
+        if (marker._popup && marker._popup.isOpen()) {
+            const pointIndex = marker.pointIndex;
+            
+            // Generate completely fresh popup content with current unit system
+            const content = window.formatPopupContent ? 
+                window.formatPopupContent(data[pointIndex], pointIndex) :
+                `<div class="popup-content">Point ${pointIndex}</div>`;
+            
+            // Update popup content
+            marker._popup.setContent(content);
+            
+            console.log(`Updated popup content for point ${pointIndex} with ${unitSystem} units`);
+        }
+    });
+}
+
+// Update any other displayed values - now checks for specific UI elements
+function updateDisplayedValues() {
+    // Update storm size legend title with correct units
+    const mapLegend = document.querySelector('.map-legend');
+    if (mapLegend) {
+        const legendTitle = mapLegend.querySelector('.legend-title');
+        if (legendTitle) {
+            const unitLabel = unitSystem === 'metric' ? 'km' : 'mi';
+            legendTitle.textContent = `Storm Size (${unitLabel})`;
+        }
+    }
+    
+    // Check for other UI elements that might need updating...
+    // (Future UI elements can be updated here)
+}
+
+// Updated function to convert and format distance for display
+function formatDistance(valueInMeters, decimals = 0) {
+    if (unitSystem === 'metric') {
+        // Convert meters to kilometers
+        return formatNumber(valueInMeters / 1000, decimals) + ' km';
+    } else {
+        // Convert meters to miles
+        return formatNumber((valueInMeters / 1000) * UNIT_CONVERSIONS.KM_TO_MILES, decimals) + ' mi';
+    }
+}
+
+// Updated function to convert and format wind speed for display
+function formatWindSpeed(speedInMS, decimals = 1) {
+    if (!isSpecified(speedInMS)) {
+        return "Not Specified";
+    }
+    
+    if (unitSystem === 'metric') {
+        return formatNumber(speedInMS, decimals) + ' m/s';
+    } else {
+        // Convert m/s to mph
+        return formatNumber(speedInMS * UNIT_CONVERSIONS.WIND_MS_TO_MPH, decimals) + ' mph';
+    }
+}
+
+// Updated function to format pressure with handling for unspecified values
+function formatPressure(pressureHPa, defaultText = "Not Specified") {
+    if (!isSpecified(pressureHPa)) {
+        return defaultText;
+    }
+    return pressureHPa + ' hPa';
+}
+
+// Convert nautical miles to display units (km or miles)
+function nmToDisplayUnits(valueNM, decimals = 0) {
+    if (unitSystem === 'metric') {
+        // Convert NM to km
+        return formatNumber(valueNM * NM_TO_KM, decimals);
+    } else {
+        // Convert NM to miles
+        return formatNumber(valueNM * UNIT_CONVERSIONS.NM_TO_MILES, decimals);
+    }
+}
+
+// Updated nmToKmForDisplay function to respect unit system
+function nmToKmForDisplay(valueNM, decimals = 0) {
+    if (unitSystem === 'metric') {
+        return formatNumber(valueNM * NM_TO_KM, decimals) + ' km';
+    } else {
+        return formatNumber(valueNM * UNIT_CONVERSIONS.NM_TO_MILES, decimals) + ' mi';
+    }
+}
+
+// Create star icon for shapefile points
+function createStarIcon() {
+    return L.divIcon({
+        className: 'star-marker',
+        html: '★',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+}
+
+// Load and process shapefile - Updated with improved format handling
+async function loadShapefile(files) {
+    try {
+        // Show loading indicator
+        const uploadElement = document.querySelector('.shapefile-upload');
+        uploadElement.classList.add('loading');
+        
+        // Reset counter if no count indicator exists
+        if (!document.querySelector('.loading-count')) {
+            shapefileCount = 0;
+        }
+        
+        // Show loading notification
+        showNotification('Processing spatial data...', 'info');
+        
+        // Find files by extension
+        let shpFile = null;
+        let dbfFile = null;
+        let prjFile = null;
+        let zipFile = null;
+        let geoJsonFile = null;
+        let kmlFile = null;
+        
+        // Check for various file types
+        for (const file of files) {
+            const fileName = file.name.toLowerCase();
+            console.log("Processing file:", fileName);
+            
+            if (fileName.endsWith('.shp')) {
+                shpFile = file;
+            } else if (fileName.endsWith('.dbf')) {
+                dbfFile = file;
+            } else if (fileName.endsWith('.prj')) {
+                prjFile = file;
+            } else if (fileName.endsWith('.zip')) {
+                zipFile = file;
+            } else if (fileName.endsWith('.geojson') || fileName.endsWith('.json')) {
+                geoJsonFile = file;
+            } else if (fileName.endsWith('.kml')) {
+                kmlFile = file;
+            }
+        }
+        
+        let geojson = null;
+        
+        // Process based on available file types
+        if (geoJsonFile) {
+            // Handle GeoJSON directly
+            console.log("Processing GeoJSON file:", geoJsonFile.name);
+            const jsonText = await readFileAsText(geoJsonFile);
+            try {
+                geojson = JSON.parse(jsonText);
+                console.log("Successfully parsed GeoJSON");
+            } catch (e) {
+                console.error("Error parsing GeoJSON:", e);
+                throw new Error("Invalid GeoJSON file format");
+            }
+        } 
+        else if (kmlFile) {
+            // For KML files - convert to GeoJSON using a simple approach
+            // Note: This is a simplified KML parser that works for basic point data
+            // For complex KML, a proper library would be better
+            console.log("Processing KML file:", kmlFile.name);
+            const kmlText = await readFileAsText(kmlFile);
+            geojson = kmlToGeoJSON(kmlText);
+        }
+        else if (zipFile) {
+            // Handle zip file containing shapefile
+            console.log("Processing ZIP file:", zipFile.name);
+            const zipBuffer = await readFileAsArrayBuffer(zipFile);
+            geojson = await shp.parseZip(zipBuffer);
+        } 
+        else if (shpFile) {
+            // Handle individual shp file, optionally with dbf
+            console.log("Processing SHP file:", shpFile.name);
+            const shpBuffer = await readFileAsArrayBuffer(shpFile);
+            geojson = await shp.parseShp(shpBuffer);
+            
+            // If we have a DBF file, add attributes to the features
+            if (dbfFile) {
+                console.log("Processing DBF file:", dbfFile.name);
+                const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
+                const dbfData = await shp.parseDbf(dbfBuffer);
+                
+                console.log("DBF data structure:", 
+                    dbfData && typeof dbfData === 'object' ? Object.keys(dbfData) : 'unexpected format');
+                
+                // Attempt to merge DBF attributes with SHP geometry
+                if (geojson.features && dbfData.features) {
+                    // Standard case
+                    geojson.features.forEach((feature, i) => {
+                        if (i < dbfData.features.length) {
+                            feature.properties = dbfData.features[i].properties;
+                        }
+                    });
+                } else if (dbfData && Array.isArray(geojson)) {
+                    // Special case: SHP is array but DBF has different structure
+                    console.log("Special case: SHP is array but DBF has different structure");
+                    
+                    // If DBF has records directly
+                    if (dbfData.records && Array.isArray(dbfData.records)) {
+                        geojson.forEach((feature, i) => {
+                            if (i < dbfData.records.length) {
+                                if (!feature.properties) feature.properties = {};
+                                Object.assign(feature.properties, dbfData.records[i]);
+                            }
+                        });
+                    }
+                }
+            }
+            
+            // If we have a PRJ file, we could use it for reprojection
+            if (prjFile) {
+                // Just read and log for now - projection is usually handled by Leaflet
+                const prjText = await readFileAsText(prjFile);
+                console.log("Projection information detected");
+            }
+        } else {
+            throw new Error("No compatible spatial files found. Please upload a shapefile (.shp, .zip), GeoJSON (.geojson, .json), or KML (.kml) file.");
+        }
+        
+        // Debug the output structure
+        if (geojson) {
+            console.log("GeoJSON structure type:", typeof geojson);
+            if (Array.isArray(geojson)) {
+                console.log("GeoJSON is an array with", geojson.length, "items");
+            } else if (typeof geojson === 'object') {
+                console.log("GeoJSON object keys:", Object.keys(geojson));
+            }
+        } else {
+            throw new Error("Failed to parse spatial data - no valid GeoJSON structure created");
+        }
+        
+        // Process and display the GeoJSON
+        displayShapefilePoints(geojson);
+        
+    } catch (error) {
+        console.error("Error processing spatial data:", error);
+        showNotification(`Error: ${error.message}`, 'error');
+    } finally {
+        // Hide loading indicator
+        document.querySelector('.shapefile-upload').classList.remove('loading');
+        
+        // Remove loading count if it exists
+        const countElement = document.querySelector('.loading-count');
+        if (countElement) {
+            countElement.remove();
+        }
+    }
+}
+
+// Simple KML to GeoJSON converter for point data
+function kmlToGeoJSON(kmlString) {
+    try {
+        // Create a DOM parser to process the KML
+        const parser = new DOMParser();
+        const kml = parser.parseFromString(kmlString, 'text/xml');
+        
+        // Check if it's a valid KML file
+        if (kml.documentElement.nodeName === "parsererror") {
+            throw new Error("Invalid KML file");
+        }
+        
+        // Create a GeoJSON FeatureCollection
+        const geojson = {
+            type: "FeatureCollection",
+            features: []
+        };
+        
+        // Process placemarks (points in KML)
+        const placemarks = kml.getElementsByTagName('Placemark');
+        console.log(`Found ${placemarks.length} placemarks in KML`);
+        
+        for (let i = 0; i < placemarks.length; i++) {
+            const placemark = placemarks[i];
+            
+            // Get name and description
+            const name = placemark.querySelector('name')?.textContent || `Point ${i+1}`;
+            const description = placemark.querySelector('description')?.textContent || '';
+            
+            // Get coordinates from Point geometry
+            const point = placemark.querySelector('Point');
+            if (point) {
+                const coordinatesText = point.querySelector('coordinates')?.textContent;
+                if (coordinatesText) {
+                    // KML format is lon,lat,alt - we need to parse and convert to [lon,lat]
+                    const parts = coordinatesText.trim().split(',');
+                    if (parts.length >= 2) {
+                        const lon = parseFloat(parts[0]);
+                        const lat = parseFloat(parts[1]);
+                        
+                        // Create a GeoJSON feature for this point
+                        const feature = {
+                            type: "Feature",
+                            geometry: {
+                                name: name,
+                                description: description
+                            }
+                        };
+                        
+                        // Add any extended data as properties
+                        const extendedData = placemark.querySelector('ExtendedData');
+                        if (extendedData) {
+                            const dataElements = extendedData.querySelectorAll('Data');
+                            dataElements.forEach(data => {
+                                const key = data.getAttribute('name');
+                                const value = data.querySelector('value')?.textContent;
+                                if (key && value) {
+                                    feature.properties[key] = value;
+                                }
+                            });
+                        }
+                        
+                        geojson.features.push(feature);
+                    }
+                }
+            }
+        }
+        
+        console.log(`Converted ${geojson.features.length} KML points to GeoJSON`);
+        return geojson;
+    } catch (error) {
+        console.error("Error converting KML to GeoJSON:", error);
+        throw new Error("Failed to parse KML file: " + error.message);
+    }
+}
+
+// Read file as array buffer (for binary files)
+function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+// Read file as text (for projection files)
+function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsText(file);
+    });
+}
+
+// Display shapefile points on the map - improved version
+function displayShapefilePoints(geojson) {
+    // Clear existing shapefile points first
+    clearShapefilePoints();
+    
+    // Create layer group if it doesn't exist already
+    if (!shapefileLayerGroup) {
+        shapefileLayerGroup = L.layerGroup().addTo(map);
+    }
+    
+    // Create star icon once to reuse
+    const starIcon = createStarIcon();
+    
+    // Count of points added
+    let pointCount = 0;
+    
+    // Enhanced function to process a feature collection or array of features
+    function processFeatureCollection(features) {
+        console.log("Processing", features.length, "features");
+        
+        features.forEach((feature, index) => {
+            // Skip if no geometry at all
+            if (!feature || !feature.geometry) {
+                console.log(`Feature ${index} has no geometry`);
+                
+                // Special case: if feature has coordinates directly but no geometry
+                if (feature.coordinates && Array.isArray(feature.coordinates)) {
+                    console.log(`Feature ${index} has direct coordinates`);
+                    addPointToMap(feature.coordinates, feature.properties || {});
+                    pointCount++;
+                    return;
+                }
+                
+                return;
+            }
+            
+            // Get type, handling both standard GeoJSON and direct properties
+            const geomType = feature.geometry.type || 
+                            (feature.type === 'Feature' ? null : feature.type);
+            
+            console.log(`Feature ${index} type:`, geomType);
+            
+            // Process based on geometry type
+            if (geomType === 'Point') {
+                // Get coordinates, handling both standard GeoJSON and direct properties
+                const coords = feature.geometry.coordinates || feature.coordinates;
+                if (coords && Array.isArray(coords)) {
+                    addPointToMap(coords, feature.properties || {});
+                    pointCount++;
+                } else {
+                    console.log(`Feature ${index} has invalid coordinates:`, coords);
+                }
+            } 
+            else if (geomType === 'MultiPoint') {
+                const coords = feature.geometry.coordinates || feature.coordinates;
+                if (coords && Array.isArray(coords)) {
+                    coords.forEach(coord => {
+                        if (coord && Array.isArray(coord)) {
+                            addPointToMap(coord, feature.properties || {});
+                            pointCount++;
+                        }
+                    });
+                }
+            }
+            // For non-point geometries, check if they have a centroid property that can be displayed
+            else if (feature.properties && (feature.properties.centroid_x || feature.properties.x_cent)) {
+                const x = feature.properties.centroid_x || feature.properties.x_cent;
+                const y = feature.properties.centroid_y || feature.properties.y_cent;
+                if (x !== undefined && y !== undefined) {
+                    addPointToMap([x, y], feature.properties);
+                    pointCount++;
+                }
+            }
+        });
+    }
+    
+    // Helper function to add a point to the map with coordinate validation
+    function addPointToMap(coords, properties) {
+        // Sanity check the coordinates
+        if (!coords || !Array.isArray(coords) || coords.length < 2) {
+            console.log("Invalid coordinates:", coords);
+            return;
+        }
+        
+        // Check which coordinate is likely latitude vs longitude
+        let lat, lon;
+        
+        // Standard GeoJSON is [longitude, latitude], but some files might be [latitude, longitude]
+        if (coords[0] >= -180 && coords[0] <= 180 && coords[1] >= -90 && coords[1] <= 90) {
+            // Likely [longitude, latitude] format (GeoJSON standard)
+            lon = coords[0];
+            lat = coords[1];
+        } else if (coords[1] >= -180 && coords[1] <= 180 && coords[0] >= -90 && coords[0] <= 90) {
+            // Likely [latitude, longitude] format (non-standard)
+            lat = coords[0];
+            lon = coords[1];
+        } else {
+            // If still not clear, assume GeoJSON standard [longitude, latitude]
+            lon = coords[0];
+            lat = coords[1];
+            
+            // Log this case to help debug
+            console.log("Unusual coordinates:", coords, "- assuming [lon, lat]");
+        }
+        
+        // Extra check for valid latitude/longitude (reject extreme values)
+        if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+            console.log("Coordinates out of range - skipping:", coords);
+            return;
+        }
+        
+        try {
+            // Create marker with star icon
+            const marker = L.marker([lat, lon], {
+                icon: starIcon,
+                title: getPointTitle(properties)
+            });
+            
+            // Add popup with properties
+            if (properties) {
+                marker.bindPopup(createShapefilePopup(properties), {
+                    className: 'shapefile-popup',
+                    maxWidth: 300
+                });
+            }
+            
+            // Add to layer group
+            marker.addTo(shapefileLayerGroup);
+            
+            // Store reference
+            shapefilePoints.push(marker);
+        } catch (e) {
+            console.error("Error adding marker at", [lat, lon], ":", e.message);
+        }
+    }
+    
+    // Get a title for the point from properties
+    function getPointTitle(properties) {
+        if (!properties) return "Shapefile Point";
+        
+        // Expanded list of common name fields
+        const nameFields = [
+            'name', 'NAME', 'Name', 'title', 'TITLE', 'Title', 'id', 'ID', 
+            'label', 'LABEL', 'station', 'STATION', 'site', 'SITE', 
+            'description', 'DESC', 'identifier', 'loc', 'location'
+        ];
+        
+        for (const field of nameFields) {
+            if (properties[field]) return properties[field];
+        }
+        
+        // Fallback to first property
+        const firstKey = Object.keys(properties)[0];
+        if (firstKey) return `${firstKey}: ${properties[firstKey]}`;
+        
+        return "Shapefile Point";
+    }
+    
+    // Process various GeoJSON structure possibilities
+    console.log("Starting to process GeoJSON structure");
+    
+    // Case 1: Standard GeoJSON FeatureCollection
+    if (geojson.type === 'FeatureCollection' && Array.isArray(geojson.features)) {
+        console.log("Processing standard FeatureCollection with", geojson.features.length, "features");
+        processFeatureCollection(geojson.features);
+    } 
+    // Case 2: Array of GeoJSON Feature objects
+    else if (Array.isArray(geojson) && geojson.length > 0) {
+        console.log("Processing array of", geojson.length, "items");
+        
+        // Check if the items are feature collections
+        if (geojson[0].type === 'FeatureCollection' && Array.isArray(geojson[0].features)) {
+            geojson.forEach((collection, i) => {
+                console.log(`Processing collection ${i} with`, 
+                    collection.features ? collection.features.length : 0, "features");
+                if (collection.features) {
+                    processFeatureCollection(collection.features);
+                }
+            });
+        }
+        // Check if the items are direct features with geometries
+        else if (geojson[0].geometry || geojson[0].type === 'Feature') {
+            console.log("Processing array of Feature objects");
+            processFeatureCollection(geojson);
+        }
+        // Check if array contains direct geometry objects
+        else if (geojson[0].type === 'Point' || geojson[0].type === 'MultiPoint') {
+            console.log("Processing array of direct geometry objects");
+            processFeatureCollection(geojson);
+        }
+        // Last resort - try to add any array items that have coordinates
+        else {
+            console.log("Treating array items as potential points");
+            geojson.forEach((item, i) => {
+                if (item.coordinates && Array.isArray(item.coordinates)) {
+                    addPointToMap(item.coordinates, item.properties || {});
+                    pointCount++;
+                } else if (Array.isArray(item) && item.length >= 2) {
+                    // The item itself might be a coordinate pair
+                    addPointToMap(item, {});
+                    pointCount++;
+                }
+            });
+        }
+    }
+    // Case 3: Single GeoJSON Feature 
+    else if (geojson.type === 'Feature' && geojson.geometry) {
+        console.log("Processing single Feature");
+        processFeatureCollection([geojson]);
+    }
+    // Case 4: Direct geometry object
+    else if (geojson.type === 'Point' || geojson.type === 'MultiPoint') {
+        console.log("Processing direct geometry object");
+        processFeatureCollection([geojson]);
+    }
+    // Case 5: Unknown structure but possibly with coordinates
+    else if (geojson.coordinates && Array.isArray(geojson.coordinates)) {
+        console.log("Processing object with direct coordinates");
+        addPointToMap(geojson.coordinates, geojson.properties || {});
+        pointCount++;
+    }
+    else {
+        console.log("Unknown GeoJSON structure:", Object.keys(geojson));
+    }
+    
+    console.log("Finished processing - found", pointCount, "points");
+    
+    // If points were added, fit the map to include them
+    if (pointCount > 0) {
+        // Create a group with both cyclone markers and shapefile points for bounds
+        const allVisibleLayers = [];
+        
+        // Add shapefile points first so they're not hidden behind cyclone markers
+        if (shapefilePoints.length > 0) {
+            allVisibleLayers.push(...shapefilePoints);
+        }
+        
+        // Add marker layers if they exist
+        if (markers.length > 0) {
+            allVisibleLayers.push(...markers);
+        }
+        
+        // If we have visible layers, fit bounds
+        if (allVisibleLayers.length > 0) {
+            const group = L.featureGroup(allVisibleLayers);
+            // if fixed bounds, use that
+            if (!window.isViewFixed){
+                map.fitBounds(group.getBounds(), {
+                    padding: [50, 50] // Add padding around bounds
+            });
+            }
+        }
+        
+        // Show success notification
+        showNotification(`Successfully loaded ${pointCount} shapefile points`, 'success', 3000);
+    } else {
+        showNotification('No point features found in shapefile - check console for details', 'warning');
+    }
+}
+
+// Create popup content for shapefile points
+function createShapefilePopup(properties) {
+    let content = `<div class="popup-content">
+        <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
+            <strong>Shapefile Point</strong>
+        </div>
+        <div class="popup-metrics">`;
+    
+    // Display all properties in a nicely formatted way
+    for (const [key, value] of Object.entries(properties)) {
+        if (value !== null && value !== undefined) {
+            // Format different types of values appropriately
+            let displayValue = value;
+            if (typeof value === 'number') {
+                // Format numbers with appropriate precision
+                displayValue = formatNumber(value, 
+                    Number.isInteger(value) ? 0 : 2);
+            } else if (typeof value === 'string' && value.length > 50) {
+                // Truncate long strings
+                displayValue = value.substring(0, 47) + '...';
+            }
+            
+            content += `
+            <div class="metric">
+                <strong class="var-name">${key}:</strong> 
+                <span class="var-value">${displayValue}</span>
+            </div>`;
+        }
+    }
+    
+    content += `</div></div>`;
+    return content;
+}
+
+// Clear shapefile points from the map
+function clearShapefilePoints() {
+    // Remove all points from the map
+    if (shapefileLayerGroup) {
+        shapefileLayerGroup.clearLayers();
+    }
+    
+    // Clear array of references
+    shapefilePoints = [];
+}
+
+// Update loading count indicator
+function updateLoadingCount(count) {
+    // Remove existing count element
+    const existingCount = document.querySelector('.loading-count');
+    if (existingCount) {
+        existingCount.remove();
+    }
+    
+    if (count > 0) {
+        // Create new count element
+        const countElement = document.createElement('div');
+        countElement.className = 'loading-count';
+        countElement.textContent = count;
+        document.querySelector('.shapefile-upload').appendChild(countElement);
+    }
+}
+
+// Load ADECK file
+async function loadAdeckFile(file) {
+    try {
+        // Show loading indicator
+        document.getElementById('loading-indicator').classList.remove('hidden');
+        
+        console.log("Loading A/B-DECK file:", file.name);
+        
+        // Read file content
+        const content = await readFileContent(file);
+        
+        console.log("File content loaded, parsing...");
+        
+        // Check if content is valid
+        if (!content || typeof content !== 'string' || content.trim() === '') {
+            throw new Error("File appears to be empty or invalid");
+        }
+        
+        // Simplified check for B-deck file - only look for BEST in the model column
+        // B-deck files will have "BEST" as the model (5th column)
+        const isBdeck = content.includes(',BEST,') || content.includes(', BEST,');
+        
+        // Parse ADECK/BDECK content with robust error handling
+        let result;
+        try {
+            if (isBdeck) {
+                result = window.AdeckReader.parseBdeckFile(content);
+            } else {
+                result = window.AdeckReader.parseAdeckFile(content);
+            }
+            console.log("Parse result:", result);
+        } catch (parseError) {
+            console.error("Error in parsing file:", parseError);
+            throw new Error(`Failed to parse A/B-DECK file: ${parseError.message}`);
+        }
+        
+        // Ensure result is an object with a storms array
+        if (!result) {
+            console.error("Parser returned", result);
+            result = { storms: [], count: 0 };
+        } else if (!result.storms) {
+            console.error("Parser did not return a valid storms array:", result);
+            // Create a valid result object with an empty storms array
+            result.storms = [];
+            result.count = 0;
+        }
+        
+        if (result.storms.length === 0) {
+            throw new Error("No valid storms found in the A/B-DECK file.");
+        }
+        
+        console.log(`Found ${result.storms.length} storms in A/B-DECK file`);
+        
+        // Store storms data in the global window object
+        window.adeckStorms = result.storms;
+        
+        // Show storm selection dialog
+        showStormSelectionDialog(window.adeckStorms);
+
+        // Show success message with appropriate file type
+        const fileType = result.isBdeck ? 'B-DECK' : 'A-DECK';
+        showNotification(`Found ${result.storms.length} storm track${result.storms.length > 1 ? 's' : ''} in ${fileType} file`, 'success', 2000);
+        
+    } catch (error) {
+        console.error("Error loading A/B-DECK file:", error);
+        showNotification(`Error: ${error.message}`, 'error');
+    } finally {
+        // Hide loading indicator
+        document.getElementById('loading-indicator').classList.add('hidden');
+    }
+}
+
+// Read file content as text
+function readFileContent(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            resolve(e.target.result);
+        };
+        
+        reader.onerror = function() {
+            reject(new Error("Could not read the file"));
+        };
+        
+        reader.readAsText(file);
+    });
+}
+
+// Get human-readable basin name
+function getBasinName(basinCode) {
+    const basinNames = {
+        'AL': 'North Atlantic',
+        'EP': 'Eastern Pacific',
+        'CP': 'Central Pacific',
+        'WP': 'Western Pacific',
+        'IO': 'Indian Ocean',
+        'SH': 'Southern Hemisphere',
+        'SP': 'South Pacific',
+        'SI': 'South Indian',
+        'BB': 'Bay of Bengal',
+        'AS': 'Arabian Sea',
+        'AA': 'Arabian Sea',
+        'NA': 'North Atlantic',
+        'SA': 'South Atlantic',
+        'SL': 'South Atlantic',
+        'XX': 'Unknown Basin'
+    };
+    
+    return basinNames[basinCode] || `${basinCode} Basin`;
+}
+
+// Function to calculate actual time from init time and tau (forecast hour)
+function calculatePointTimeFromTau(initTimeString, tau) {
+    if (!initTimeString || tau === undefined) return null;
+    
+    try {
+        // Parse the init time string (format depends on your specific data)
+        // Common formats are "YYYYMMDDHH" or ISO string
+        let initTime;
+        
+        if (typeof initTimeString === 'string') {
+            // Handle numeric format like "2023091000" (YYYYMMDDHH)
+            if (/^\d{10}$/.test(initTimeString)) {
+                const year = parseInt(initTimeString.substring(0, 4));
+                const month = parseInt(initTimeString.substring(4, 6)) - 1; // JS months are 0-indexed
+                const day = parseInt(initTimeString.substring(6, 8));
+                const hour = parseInt(initTimeString.substring(8, 10));
+                initTime = new Date(Date.UTC(year, month, day, hour, 0, 0));
+            } else {
+                // Try to parse as a standard date string
+                initTime = new Date(initTimeString);
+            }
+        } else if (initTimeString instanceof Date) {
+            initTime = new Date(initTimeString);
+        } else {
+            return null;
+        }
+        
+        // Check if we have a valid date
+        if (isNaN(initTime.getTime())) {
+            console.warn("Invalid init time format:", initTimeString);
+            return null;
+        }
+        
+        // Calculate forecast time by adding tau hours
+        const forecastTime = new Date(initTime);
+        forecastTime.setTime(forecastTime.getTime() + (tau * 60 * 60 * 1000)); // tau hours in milliseconds
+        
+        return forecastTime;
+    } catch(e) {
+        console.error("Error calculating point time:", e);
+        return null;
+    }
+}
+
+// Format time display for ADECK points with improved clarity
+function formatPointTime(pointTime, includeDate = true) {
+    if (!pointTime) return "Unknown";
+    
+    try {
+        const options = {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'UTC',
+            hour12: false
+        };
+        
+        if (includeDate) {
+            options.year = 'numeric';
+            options.month = 'short';
+            options.day = 'numeric';
+        }
+        
+        return new Intl.DateTimeFormat('en-US', options).format(pointTime) + " UTC";
+    } catch(e) {
+        console.error("Error formatting time:", e);
+        return "Unknown";
+    }
+}
+
+// Helper function to check if a parameter is specified (not null, undefined, or zero)
+function isSpecified(value) {
+    // For wind speed and some other meteorological parameters,
+    // a value of 0.0 often means "not specified" rather than actually zero
+    return value !== null && value !== undefined && value !== 0 && value !== 0.0;
+}
+
+// Format parameters with appropriate defaults for missing values
+function formatParameter(value, formatter, defaultText = "Not Specified") {
+    if (isSpecified(value)) {
+        return formatter(value);
+    }
+    return defaultText;
+}
+
+// Updated function to format wind speed with handling for unspecified values
+function formatWindSpeed(speedInMS, decimals = 1) {
+    if (!isSpecified(speedInMS)) {
+        return "Not Specified";
+    }
+    
+    if (unitSystem === 'metric') {
+        return formatNumber(speedInMS, decimals) + ' m/s';
+    } else {
+        // Convert m/s to mph
+        return formatNumber(speedInMS * UNIT_CONVERSIONS.WIND_MS_TO_MPH, decimals) + ' mph';
+    }
+}
+
+// Updated function to format pressure with handling for unspecified values
+function formatPressure(pressureHPa, defaultText = "Not Specified") {
+    if (!isSpecified(pressureHPa)) {
+        return defaultText;
+    }
+    return pressureHPa + ' hPa';
+}
+
+// Show storm selection dialog - updated to include init time selector
+function showStormSelectionDialog(storms) {
+    // Close any existing dialog
+    if (adeckStormSelectionDialog) {
+        adeckStormSelectionDialog.remove();
+    }
+    
+    // Group storms by date, basin, and model for better organization
+    const groupedStorms = window.AdeckReader.groupStormsByDateAndModel(storms);
+    
+    // Create dialog container
+    const dialog = document.createElement('div');
+    dialog.id = 'adeck-storm-selection';
+    dialog.className = 'storm-selection-dialog';
+    
+    // Get the first storm to extract cyclone information for the header
+    const firstStorm = storms.length > 0 ? storms[0] : null;
+    const cycloneName = firstStorm && firstStorm.cycloneName ? 
+                        firstStorm.cycloneName : 
+                        'Select a Forecast Track';
+    
+    // Create dialog header with cyclone name and controls
+    const header = document.createElement('div');
+    header.className = 'dialog-header';
+    header.style.cursor = 'move';    
+    
+    // Add header title and controls with better positioning
+    header.innerHTML = `
+    <h3>${cycloneName}</h3>
+    <div class="dialog-controls">
+        <div class="track-toggle-container">
+            <button id="toggle-all-tracks" class="toggle-tracks-btn" title="Toggle all tracks visibility">Show All</button>
+        </div>
+        <div class="window-controls">
+            <button class="minimize-btn" title="Minimize dialog">_</button>
+            <button class="close-btn" title="Close dialog">&times;</button>
+        </div>
+    </div>
+    `;
+    dialog.appendChild(header);
+
+
+
+
+    // Add the "Fix View" button
+    const fixViewButton = document.createElement('button');
+    fixViewButton.textContent = 'Fix View';
+    fixViewButton.className = 'fix-view-button';
+
+    // Add click event listener to toggle the fix view state
+    fixViewButton.addEventListener('click', function () {
+        window.isViewFixed = !window.isViewFixed;
+
+        if (window.isViewFixed) {
+            // Store the current map bounds
+            window.fixedBounds = map.getBounds();
+            console.log('Fixing view to bounds:', window.fixedBounds);
+        } else {
+            // Clear the fixed bounds
+            window.fixedBounds = null;
+            console.log('Unfixing view.');
+        }
+
+        // Update button text based on the state
+        fixViewButton.textContent = window.isViewFixed ? 'Unfix View' : 'Fix View';
+
+        // Show notification
+        showNotification(
+            window.isViewFixed ? 'Map view is now fixed' : 'Map view is now unfixed',
+            'info',
+            1500
+        );
+    });
+
+    // Append the Fix View button to the dialog
+    dialog.appendChild(fixViewButton);
+
+
+
+
+
+    
+    // Show cyclone ID if available
+    if (firstStorm && firstStorm.cycloneId) {
+        const cycloneIdElement = document.createElement('div');
+        cycloneIdElement.className = 'cyclone-id';
+        cycloneIdElement.textContent = firstStorm.cycloneId;
+        header.insertBefore(cycloneIdElement, header.querySelector('.dialog-controls'));
+    }
+    
+    // Add model description container right after the header
+    const modelDescContainer = document.createElement('div');
+    modelDescContainer.className = 'model-description-container';
+    modelDescContainer.innerHTML = '<div class="model-description">Select a model track to see its description</div>';
+    dialog.appendChild(modelDescContainer);
+    
+    // Add currently selected model info display
+    const selectedModelInfo = document.createElement('div');
+    selectedModelInfo.className = 'selected-model-info hidden';
+    selectedModelInfo.innerHTML = '<span class="selected-model-label">No model selected</span>';
+    dialog.appendChild(selectedModelInfo);
+    
+    // Add Init Time Selector
+    const initTimeSelector = window.AdeckReader.createInitTimeSelector(storms, (selectedInitTime) => {
+        // When an init time is selected, update the tracks display below
+        window.AdeckReader.displayTracksByInitTime(storms, selectedInitTime);
+    });
+    
+    dialog.appendChild(initTimeSelector);
+    
+    // Add Model Category selector
+    const modelCategorySelector = document.createElement('div');
+    modelCategorySelector.className = 'model-category-filter';
+    
+    // Define the model categories - same as in AdeckReader for consistency
+    const modelCategories = [
+        { id: 'all', name: 'All Models' },
+        { 
+            id: 'track_intensity', 
+            name: 'Track & Intensity Models', 
+            models: [
+                'OFCL', 'OFCI', 'CARQ',
+                'AVNO', 'AVNI', 'GFS',
+                'GFDI', 'GFDL', 'GFDT', 'GFDN',
+                'UKMI', 'UKM', 'UKX', 'UKXI', 'UKX2', 'UKM2',
+                'CMC', 'HWRF', 'HMON',
+                'EMXI', 'EMX', 'EMX2', 'ECMWF',
+                'NGPS', 'NGPI', 'NGP2',
+                'DSHP', 'SHIP', 'LGEM', 'SHFR', 'SHNS', 'DRCL'
+            ]
+        },
+        {
+            id: 'track_only',
+            name: 'Track-Only Models',
+            models: [
+                'TVCN', 'TVCE', 'TVCX',
+                'CONU', 'GUNA', 'GUNS', 'HCCA',
+                'BAMD', 'BAMM', 'BAMS', 'LBAR', 'XTRP',
+                'CLIP', 'CLP5', 'DRCL', 'MRCL'
+            ]
+        }
+    ];
+    
+    // Create label for the dropdown
+    const categoryLabel = document.createElement('div');
+    categoryLabel.className = 'model-category-label';
+    categoryLabel.textContent = 'Model Type:';
+    modelCategorySelector.appendChild(categoryLabel);
+    
+    // Create dropdown
+    const categoryDropdown = document.createElement('select');
+    categoryDropdown.className = 'model-category-dropdown';
+    
+    // Function to update category dropdown with track counts for current init time
+    const updateCategoryDropdownCounts = (selectedInitTime) => {
+        // Filter storms to only include those with the selected init time
+        const currentInitStorms = selectedInitTime 
+            ? storms.filter(storm => storm.initTime === selectedInitTime)
+            : storms;
+        
+        // Count tracks for each category in the filtered set
+        const categoryCounts = {};
+        categoryCounts['all'] = currentInitStorms.length;
+        
+        // Count tracks in each category
+        modelCategories.slice(1).forEach(category => {
+            const categoryModels = category.models || [];
+            const count = currentInitStorms.filter(storm => categoryModels.includes(storm.model)).length;
+            categoryCounts[category.id] = count;
+        });
+        
+        // Update dropdown options with current counts
+        while (categoryDropdown.firstChild) {
+            categoryDropdown.removeChild(categoryDropdown.firstChild);
+        }
+        
+        // Get the list of models that are actually in the data
+        const availableModels = [...new Set(currentInitStorms.map(storm => storm.model))];
+        
+        // Add options to the dropdown with track counts - only for categories with available models
+        modelCategories.forEach(category => {
+            // For non-"all" categories, check if any models are available
+            if (category.id === 'all' || 
+                (category.models && category.models.some(model => availableModels.includes(model)))) {
+                
+                const option = document.createElement('option');
+                option.value = category.id;
+                const count = categoryCounts[category.id];
+                option.textContent = `${category.name} (${count} tracks)`;
+                categoryDropdown.appendChild(option);
+            }
+        });
+    };
+    
+    // Initialize dropdown with counts for the default init time (latest)
+    const defaultInitTime = document.querySelector('.init-time-dropdown')?.value;
+    updateCategoryDropdownCounts(defaultInitTime);
+    
+    // Add listener to init time dropdown to update category counts when changed
+    const initTimeDropdown = dialog.querySelector('.init-time-dropdown');
+    if (initTimeDropdown) {
+        initTimeDropdown.addEventListener('change', function() {
+            updateCategoryDropdownCounts(this.value);
+        });
+    }
+    
+    // Add change handler for dropdown
+    //categoryDropdown.addEventListener('change', function() {
+        //const selectedCategory = this.value;
+       // const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
+       // 
+       // // Filter storms by both init time and category
+       // let filteredStorms = storms;
+       // 
+       // // First filter by init time if selected
+       // if (selectedInitTime) {
+       //     filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
+       // }
+       // 
+       // // Then filter by model category if not "all"
+       // if (selectedCategory !== 'all') {
+       //     const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
+       //     filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
+       // }
+       // 
+       // // Display the filtered tracks
+       // displayAdeckTracks(filteredStorms, selectedStormId);
+       // 
+       // // Show notification
+       // showNotification(`Displaying ${selectedCategory} model tracks`, 'info', 1500);
+    //});
+        const categories = [
+            { id: 'track_intensity', name: 'Track & Intensity Models' },
+            { id: 'track_only', name: 'Track-Only Models' },
+            { id: 'all', name: 'All Models' }
+        ];
+        
+        let selectedCategory = 'all'; // Default category
+        
+        categories.forEach(category => {
+            const label = document.createElement('label');
+            label.className = 'category-checkbox-label';
+        
+            const checkbox = document.createElement('input');
+            checkbox.type = 'radio';
+            checkbox.name = 'model-category';
+            checkbox.value = category.id;
+            checkbox.checked = category.id === selectedCategory;
+            checkbox.className = 'category-checkbox';
+        
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    selectedCategory = this.value;
+                
+                    // Filter storms by both init time and category
+                    const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
+                    let filteredStorms = storms;
+                
+                    // First filter by init time if selected
+                    if (selectedInitTime) {
+                        filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
+                    }
+                
+                    // Then filter by model category if not "all"
+                    if (selectedCategory !== 'all') {
+                        const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
+                        filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
+                    }
+                
+                    // Display the filtered tracks
+                    displayAdeckTracks(filteredStorms, selectedStormId);
+                
+                    // Show notification
+                    showNotification(`Displaying ${category.name} model tracks`, 'info', 1500);
+                }
+            });
+        
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(category.name));
+            modelCategorySelector.appendChild(label);
+        });
+    
+   
+    
+    //modelCategorySelector.appendChild(categoryDropdown);
+    dialog.appendChild(modelCategorySelector);
+    
+    // Create content container
+    const content = document.createElement('div');
+    content.className = 'dialog-content';
+    dialog.appendChild(content);
+    
+    // Create storm list
+    const stormList = document.createElement('div');
+    stormList.className = 'storm-list';
+    content.appendChild(stormList);
+    
+    // Get dates and sort in descending order (newest first)
+    const dates = Object.keys(groupedStorms).sort((a, b) => b.localeCompare(a));
+    
+    if (dates.length === 0) {
+        stormList.innerHTML = '<div class="empty-state">No valid forecast tracks found. Please check the file format.</div>';
+    } else {
+        // Create date sections
+        dates.forEach(date => {
+            // Create date section code here...
+            // ...existing code...
+        });
+    }
+    
+    // Add dialog to document
+    document.body.appendChild(dialog);
+    
+    // Position the dialog in the middle-left of the screen
+    const mapContainer = document.getElementById('map-container');
+    const mapRect = mapContainer.getBoundingClientRect();
+    
+    dialog.style.position = 'absolute';
+    dialog.style.top = '50%';
+    dialog.style.left = mapRect.left + 20 + 'px'; // Position on left with margin
+    dialog.style.transform = 'translateY(-50%)'; // Center vertically only
+    dialog.style.maxHeight = '80vh'; // Limit height
+    dialog.style.maxWidth = '35%'; // Limit width
+    dialog.style.minWidth = '300px'; // Ensure minimum width
+    
+    // Set a high z-index to ensure visibility in fullscreen mode
+    dialog.style.zIndex = document.fullscreenElement ? '10000' : '1000';
+    
+    // Store reference to dialog
+    adeckStormSelectionDialog = dialog;
+    
+    // Make dialog draggable with enhanced draggability
+    makeEnhancedDraggable(dialog);
+    
+    // Add event listeners for minimize and close buttons
+    dialog.querySelector('.minimize-btn').addEventListener('click', () => {
+        toggleDialogMinimize(dialog);
+        // Don't trigger any zoom changes when minimizing
+    });
+    
+    dialog.querySelector('.close-btn').addEventListener('click', () => {
+        dialog.remove();
+        adeckStormSelectionDialog = null;
+        
+        // Set the flag to indicate dialog was previously shown but is now closed
+        adeckDialogWasShown = true;
+        // Don't trigger any zoom changes when closing
+    });
+    
+    // Add toggle all tracks button functionality
+    const toggleAllTracksBtn = dialog.querySelector('#toggle-all-tracks');
+    if (toggleAllTracksBtn) {
+        // Create a flag to track track visibility state - initially all tracks are shown
+        let allTracksVisible = true;
+        
+        toggleAllTracksBtn.addEventListener('click', function() {
+            // Toggle the state
+            allTracksVisible = !allTracksVisible;
+            
+            // Update button text
+            this.textContent = allTracksVisible ? 'Hide All' : 'Show All';
+            this.title = allTracksVisible ? 'Hide all tracks' : 'Show all tracks';
+            
+            // Toggle visibility of all track layers
+            if (window.adeckLines && window.adeckLines.length > 0) {
+                window.adeckLines.forEach(line => {
+                    if (line) {
+                        if (allTracksVisible) {
+                            line.addTo(window.adeckLayerGroup);
+                        } else {
+                            window.adeckLayerGroup.removeLayer(line);
+                        }
+                    }
+                });
+            }
+            
+            // Toggle visibility of all track markers
+            if (window.adeckMarkers && window.adeckMarkers.length > 0) {
+                window.adeckMarkers.forEach(marker => {
+                    if (marker) {
+                        if (allTracksVisible) {
+                            marker.addTo(window.adeckLayerGroup);
+                        } else {
+                            window.adeckLayerGroup.removeLayer(marker);
+                        }
+                    }
+                });
+            }
+            
+            // If a track is selected, keep it visible regardless
+            if (selectedStormId !== null) {
+                // Ensure the selected track remains visible
+                window.adeckLines.forEach((line, index) => {
+                    if (line && line.stormId === selectedStormId) {
+                        line.addTo(window.adeckLayerGroup);
+                    }
+                });
+                
+                window.adeckMarkers.forEach((marker, index) => {
+                    if (marker && marker.stormId === selectedStormId) {
+                        marker.addTo(window.adeckLayerGroup);
+                    }
+                });
+            }
+        });
+        
+        // Initialize button text (initially all tracks are shown)
+        toggleAllTracksBtn.textContent = 'Hide All';
+        toggleAllTracksBtn.title = 'Hide all tracks';
+    }
+    
+    // Add visual highlight to dialog header on hover
+    header.addEventListener('mouseenter', () => {
+        header.style.backgroundColor = '';
+    });
+    
+    // Display all tracks for the latest init time by default
+    window.AdeckReader.displayTracksByInitTime(storms);
+}
+
+// Enhanced draggable function specifically for A-deck dialogs
+function makeEnhancedDraggable(element) {
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    let isDragging = false;
+    let dragTimeout;
+    
+    // Find header to use as drag handle
+    const header = element.querySelector('.dialog-header');
+    if (header) {
+        // Mouse events
+        header.addEventListener('mousedown', dragMouseDown);
+        
+        // Touch events for mobile devices
+        header.addEventListener('touchstart', dragTouchStart, { passive: false });
+    } else {
+        // If no header, use the whole element
+        element.addEventListener('mousedown', dragMouseDown);
+        element.addEventListener('touchstart', dragTouchStart, { passive: false });
+    }
+    
+    function dragMouseDown(e) {
+        e.preventDefault();
+        
+        // Get initial position
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        
+        // Set dragging state
+        isDragging = true;
+        element.classList.add('dragging');
+        
+        // Add event listeners
+        document.addEventListener('mousemove', elementDrag);
+        document.addEventListener('mouseup', closeDragElement);
+    }
+    
+    function dragTouchStart(e) {
+        e.preventDefault();
+        
+        if (e.touches.length === 1) {
+            // Get initial position from touch
+            pos3 = e.touches[0].clientX;
+            pos4 = e.touches[0].clientY;
+            
+            // Set dragging state
+            isDragging = true;
+            element.classList.add('dragging');
+            
+            // Add event listeners
+            document.addEventListener('touchmove', elementTouchDrag, { passive: false });
+            document.addEventListener('touchend', closeTouchDragElement);
+        }
+    }
+    
+    function elementDrag(e) {
+        e.preventDefault();
+        
+        if (!isDragging) return;
+        
+        // Calculate movement
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        
+        // Throttle updates for better performance
+        if (dragTimeout) {
+            return;
+        }
+        
+        dragTimeout = setTimeout(() => {
+            // Update position
+            element.style.top = (element.offsetTop - pos2) + "px";
+            element.style.left = (element.offsetLeft - pos1) + "px";
+            element.style.transform = 'none'; // Remove any transform when dragging starts
+            dragTimeout = null;
+        }, 10);
+    }
+    
+    function elementTouchDrag(e) {
+        e.preventDefault();
+        
+        if (!isDragging || e.touches.length !== 1) return;
+        
+        // Calculate movement from touch
+        pos1 = pos3 - e.touches[0].clientX;
+        dragTimeout = setTimeout(() => {
+            // Update position
+            element.style.top = (element.offsetTop - pos2) + "px";
+            element.style.left = (element.offsetLeft - pos1) + "px";
+            element.style.transform = 'none'; // Remove any transform when dragging starts
+            dragTimeout = null;
+        }, 10);
+    }
+    
+    function closeDragElement() {
+        // End dragging state
+        isDragging = false;
+        element.classList.remove('dragging');
+        
+        // Remove event listeners
+        document.removeEventListener('mousemove', elementDrag);
+        document.removeEventListener('mouseup', closeDragElement);
+        
+        // Clear any pending timeout
+        if (dragTimeout) {
+            clearTimeout(dragTimeout);
+            dragTimeout = null;
+        }
+    }
+    
+    function closeTouchDragElement() {
+        // End dragging state
+        isDragging = false;
+        element.classList.remove('dragging');
+        
+        // Remove event listeners
+        document.removeEventListener('touchmove', elementTouchDrag);
+        document.removeEventListener('touchend', closeTouchDragElement);
+        
+        // Clear any pending timeout
+        if (dragTimeout) {
+            clearTimeout(dragTimeout);
+            dragTimeout = null;
+        }
+    }
+    
+    return element;
+}
+
+// Add this function to handle ADECK track display
+function displayAdeckTracks(storms, selectedStormId = null, defaultModelsOnly = true) {
+    // Remove existing tracks first
+    removeAdeckTracks();
+    
+    if (!storms || !Array.isArray(storms) || storms.length === 0) {
+        console.log("No ADECK tracks to display");
+        return;
+    }
+
+    // Add a flag to track if we had to fall back to showing all models
+    let usedFallback = false;
+
+    window.currentModelFilterPreference = defaultModelsOnly;
+    
+    // Preserve the currently selected model category
+    const categoryDropdown = document.querySelector('.model-category-dropdown');
+    const selectedCategory = categoryDropdown ? categoryDropdown.value : 'all';
+    
+    // Filter storms based on the model display setting
+    let filteredStorms;
+   
+    console.log(`Filtering storms: defaultModelsOnly = ${defaultModelsOnly}, selectedCategory = ${selectedCategory}`);
+    if (defaultModelsOnly) {
+        // Try to show default models first
+        filteredStorms = storms.filter(storm => isDefaultModel(storm.model));
+        
+        // If no default models, fall back to all known models
+        if (filteredStorms.length === 0) {
+            filteredStorms = storms.filter(storm => isKnownModel(storm.model));
+            console.log("No default models found, showing all known models");
+            usedFallback = true; // Track that we used the fallback
+        }
+    } else {
+        // Show all known models
+        filteredStorms = storms.filter(storm => isKnownModel(storm.model));
+    }
+    
+    // Apply model category filter if not "all"
+    if (selectedCategory !== 'all') {
+        // Get the model category definition
+        const modelCategories = [
+            { id: 'all', name: 'All Models' },
+            { 
+                id: 'track_intensity', 
+                name: 'Track & Intensity Models', 
+                models: [
+                    'OFCL', 'OFCI', 'CARQ',
+                    'AVNO', 'AVNI', 'GFS',
+                    'GFDI', 'GFDL', 'GFDT', 'GFDN',
+                    'UKMI', 'UKM', 'UKX', 'UKXI', 'UKX2', 'UKM2',
+                    'CMC', 'HWRF', 'HMON',
+                    'EMXI', 'EMX', 'EMX2', 'ECMWF',
+                    'NGPS', 'NGPI', 'NGP2',
+                    'DSHP', 'SHIP', 'LGEM', 'SHFR', 'SHNS', 'DRCL'
+                ]
+            },
+            {
+                id: 'track_only',
+                name: 'Track-Only Models',
+                models: [
+                    'TVCN', 'TVCE', 'TVCX',
+                    'CONU', 'GUNA', 'GUNS', 'HCCA',
+                    'BAMD', 'BAMM', 'BAMS', 'LBAR', 'XTRP',
+                    'CLIP', 'CLP5', 'DRCL', 'MRCL'
+                ]
+            }
+        ];
+        
+        const categoryDef = modelCategories.find(cat => cat.id === selectedCategory);
+        
+        if (categoryDef && categoryDef.models) {
+            const beforeCount = filteredStorms.length;
+            filteredStorms = filteredStorms.filter(storm => categoryDef.models.includes(storm.model));
+            console.log(`Applied ${selectedCategory} category filter: ${filteredStorms.length} of ${beforeCount} storms match`);
+        }
+    }
+    
+    if (filteredStorms.length === 0) {
+        console.log("No tracks with known models to display");
+        showNotification("No recognized forecast models to display", "warning");
+        return;
+    }
+    
+    console.log(`Displaying ${filteredStorms.length} recognized ADECK tracks (filtered from ${storms.length} total)`);
+
+    // Store the current filter preference to preseve it for future use
+    if (!usedFallback) {
+        window.lastModelFilterPreference = defaultModelsOnly;
+    }
+    
+    // Store the current category selection
+    window.lastModelCategory = selectedCategory;
+    
+    // Process storms to add special styling for first points
+    const processedStorms = window.AdeckReader 
+        ? window.AdeckReader.processTracksForDisplay(filteredStorms, defaultModelsOnly)
+        : filteredStorms;
+    
+    // Create a layer group for ADECK tracks if it doesn't exist
+    if (!window.adeckLayerGroup) {
+        window.adeckLayerGroup = L.layerGroup().addTo(map);
+    }
+    
+    // Store references to all markers
+    window.adeckMarkers = [];
+    window.adeckLines = [];
+    
+    // Determine if any storm is selected
+    const isAnyStormSelected = selectedStormId !== null;
+    
+    // Display each storm track
+    processedStorms.forEach(storm => {
+        const isSelected = selectedStormId === storm.id;
+        const opacity = isAnyStormSelected ? (isSelected ? 1.0 : 0.3) : 0.8;
+        const zIndexOffset = isSelected ? 500 : 0;
+        
+        // Get the model-specific color for the track line
+        const modelColor = window.AdeckReader.getModelColor(storm.model);
+        
+        // Skip if model color is not defined (should not happen due to filtering)
+        if (!modelColor) return;
+        
+        // Create polyline for the track
+        const points = storm.points.map(point => [point.latitude, point.longitude]);
+        if (points.length > 0) {
+            const trackLine = L.polyline(points, {
+                color: modelColor, // Keep track lines colored by model for differentiation
+                weight: isSelected ? 3 : 2,
+                opacity: opacity,
+                smoothFactor: 1,
+                className: `adeck-track ${isSelected ? 'selected-track' : ''} model-track-${storm.model}`,
+                dashArray: isSelected ? '' : '5, 5',
+                stormId: storm.id // Add this to identify each track's storm ID
+            }).addTo(window.adeckLayerGroup);
+            
+            // Add metadata to the line
+            trackLine.stormId = storm.id;
+            trackLine.model = storm.model;
+            
+            // Add model description as a tooltip
+            if (MODEL_DESCRIPTIONS[storm.model]) {
+                trackLine.bindTooltip(`${storm.model}: ${MODEL_DESCRIPTIONS[storm.model]}`, {
+                    sticky: true,
+                    opacity: 0.9,
+                    className: 'model-tooltip'
+                });
+            }
+            
+            // Add click handler
+            trackLine.on('click', function() {
+                selectAdeckTrack(storm.id);
+                
+                // Update the model description in the dialog if it exists
+                updateModelDescriptionInDialog(storm.model);
+            });
+            
+            window.adeckLines.push(trackLine);
+        }
+        
+        // Create markers for each point - using the intensity-based category coloring
+        storm.points.forEach((point, index) => {
+            // Use hurricane category based on wind speed (same as CSV tracks)
+            const category = getHurricaneCategory(point.wind_speed);
+            
+            // Determine marker size based on category and if it's the first point
+            const iconSize = index === 0 ? (category.radius * 2) + 2 : category.radius * 2;
+            
+            // Create marker icon using category color instead of model color
+            const icon = L.divIcon({
+                className: `hurricane-marker category-${category.name.toLowerCase().replace(/\s+/g, '-')} ${index === 0 ? 'first-point' : ''}`,
+                iconSize: [iconSize, iconSize],
+                html: `<div style="background-color: ${category.color}; width: 100%; height: 100%; border-radius: 50%; 
+                      ${index === 0 ? 'border: 2px solid #FFFFFF;' : ''}" 
+                      class="${index === 0 ? 'first-point-marker' : ''}"></div>`,
+                iconAnchor: [iconSize/2, iconSize/2]
+            });
+            
+            // Create the marker
+            const marker = L.marker([point.latitude, point.longitude], {
+                icon: icon,
+                opacity: opacity,
+                title: `${storm.model} - ${category.name} - ${formatWindSpeed(point.wind_speed)}`,
+                zIndexOffset: index === 0 ? zIndexOffset + 1000 : zIndexOffset
+            }).addTo(window.adeckLayerGroup);
+            
+            // Add metadata to the marker
+            marker.stormId = storm.id;
+            marker.model = storm.model;
+            marker.pointIndex = index;
+            marker.category = category.name;
+            marker.windSpeed = point.wind_speed;
+            
+            // Calculate actual time for this point using init time and tau (forecast hour)
+            const pointTime = calculatePointTimeFromTau(storm.initTime, point.tau);
+            marker.pointTime = pointTime;
+            
+            // Also store the time data directly on the point object for easier access
+            point.pointTime = pointTime;
+            
+            // Add special styling for first point
+            if (index === 0) {
+                marker.on('add', function() {
+                    const markerElement = this.getElement();
+                    if (markerElement) {
+                        markerElement.classList.add('track-first-point');
+                        markerElement.style.zIndex = 1000;
+                    }
+                });
+            }
+            
+            // Add click handler for marker
+            marker.on('click', function() {
+                selectAdeckTrack(storm.id);
+                
+                // Update the model description in the dialog if it exists
+                updateModelDescriptionInDialog(storm.model);
+                
+                // Create popup using the same formatPopupContent function as CSV tracks
+                if (window.formatPopupContent) {
+                    // Add model name and actual time to the point data for display in popup
+                    const pointData = {
+                        ...point,
+                        cycloneId: storm.cycloneId,
+                        cycloneName: storm.model, // Just use the model name directly
+                        pointTime: pointTime,     // Add the calculated time
+                        initTime: storm.initTime  // Add the init time for reference
+                    };
+                    const content = window.formatPopupContent(pointData, index);
+                    
+                    // Create popup and position it 100km to the right
+                    const popup = L.popup()
+                        .setContent(content);
+                        
+                    marker.bindPopup(popup);
+                    window.positionPopupToRight(marker, popup);
+                } else {
+                    // Fallback simple popup if formatPopupContent isn't available
+                    // Format time information - show both init and forecast time
+                    let timeDisplay = "";
+                    if (pointTime) {
+                        timeDisplay = `<br>Valid: ${formatPointTime(pointTime)}`;
+                        if (index === 0) {
+                            timeDisplay += " (Initial)";
+                        } else {
+                            timeDisplay += ` (+${point.tau}h)`;
+                        }
+                    } else if (point.tau !== undefined) {
+                        timeDisplay = `<br>Forecast: +${point.tau}h`;
+                    }
+                    
+                    // Format intensity and pressure with "Not Specified" for zero/missing values
+                    const intensityDisplay = formatWindSpeed(point.wind_speed);
+                    const pressureDisplay = formatPressure(point.mslp);
+                    
+                    // Determine which category label to show based on wind speed
+                    let categoryDisplay = "Intensity: Not Specified";
+                    let categoryColor = "#999"; // Default gray for unspecified
+                    if (isSpecified(point.wind_speed)) {
+                        const category = getHurricaneCategory(point.wind_speed);
+                        categoryDisplay = category.name;
+                        categoryColor = category.color;
+                    }
+                    
+                    const popupContent = `
+                        <div class="adeck-popup">
+                            <b>${storm.model || 'Unknown Model'}</b><br>
+                            <small class="model-description">${getModelDescription(storm.model)}</small>
+                            <hr>
+                            <div class="intensity-badge" style="background-color:${categoryColor}">
+                                ${categoryDisplay}
+                            </div>
+                            Position: ${point.latitudeFormatted || point.latitude.toFixed(1)}, 
+                                     ${point.longitudeFormatted || Math.abs(point.longitude).toFixed(1)}°${point.longitude >= 0 ? 'E' : 'W'}
+                            <br>Init: ${storm.initTime ? formatPointTime(new Date(storm.initTime), true) : "Unknown"}${timeDisplay}
+                            <br>Wind: ${intensityDisplay}
+                            <br>Pressure: ${pressureDisplay}
+                        </div>
+                    `;
+                    
+                    const popup = L.popup().setContent(popupContent);
+                    marker.bindPopup(popup);
+                    window.positionPopupToRight(marker, popup);
+                }
+            });
+            
+            window.adeckMarkers.push(marker);
+        });
+    });
+    
+    // Apply zoom-appropriate symbology
+    if (typeof updateAdeckSymbology === 'function') {
+        updateAdeckSymbology();
+    }
+    
+    // Fit bounds to include all tracks if no specific track is selected
+    if (!isAnyStormSelected && window.adeckMarkers.length > 0) {
+        const group = L.featureGroup(window.adeckMarkers);
+        // only if fix view is not set 
+        if (!window.isViewFixed) {
+            map.fitBounds(group.getBounds(), { padding: [50, 50] });
+        }
+    }
+    
+    // Record that the A-deck dialog was shown
+    if (typeof adeckDialogWasShown !== 'undefined') {
+        adeckDialogWasShown = true;
+    }
+}
+
+// Function to update the model description in the dialog
+function updateModelDescriptionInDialog(modelName) {
+    // Find the model description container if it exists
+    const descContainer = document.querySelector('.model-description-container');
+    if (!descContainer) {
+        // Create it if it doesn't exist, but only if the dialog exists
+        const dialog = document.getElementById('adeck-storm-selection');
+        if (dialog) {
+            const newDescContainer = document.createElement('div');
+            newDescContainer.className = 'model-description-container';
+            
+            // Get the description text
+            const description = getModelDescription(modelName);
+            
+            // Create description element
+            const descElement = document.createElement('div');
+            descElement.className = 'model-description active';
+            descElement.innerHTML = `<strong>${modelName}:</strong> ${description}`;
+            
+            newDescContainer.appendChild(descElement);
+            
+            // Insert it after the header
+            const header = dialog.querySelector('.dialog-header');
+            if (header) {
+                header.insertAdjacentElement('afterend', newDescContainer);
+            } else {
+                dialog.insertBefore(newDescContainer, dialog.firstChild.nextSibling);
+            }
+        }
+    } else {
+        // Update the existing container
+        const description = getModelDescription(modelName);
+        descContainer.innerHTML = `<div class="model-description active"><strong>${modelName}:</strong> ${description}</div>`;
+    }
+    
+    // Also update the selected model info in the minimized dialog
+    const selectedModelInfo = document.querySelector('.selected-model-info');
+    if (selectedModelInfo) {
+        selectedModelInfo.innerHTML = `<span class="selected-model-label">${modelName} track selected</span>`;
+        selectedModelInfo.classList.remove('hidden');
+    }
+}
+
+// Remove ADECK tracks from the map
+function removeAdeckTracks() {
+    if (window.adeckLayerGroup) {
+        window.adeckLayerGroup.clearLayers();
+    }
+    
+    window.adeckMarkers = [];
+    window.adeckLines = [];
+    
+    // Hide the reopen button if we're clearing all A-deck data
+    const reopenButton = document.getElementById('reopen-adeck-dialog');
+    if (reopenButton && !window.adeckStorms) {
+        reopenButton.style.display = 'none';
+    }
+}
+
+// Function to update A-deck track symbology based on zoom level
+function updateAdeckSymbology() {
+    const zoomLevel = map.getZoom();
+    
+    // Update markers
+    if (window.adeckMarkers && window.adeckMarkers.length > 0) {
+        window.adeckMarkers.forEach(marker => {
+            // Skip if marker is undefined or null
+            if (!marker) return;
+            
+            // Check if this marker belongs to a hidden track
+            const shouldBeHidden = marker.options && 
+                                  marker.options.stormId && 
+                                  window.AdeckReader && 
+                                  window.AdeckReader.hiddenTracks && 
+                                  window.AdeckReader.hiddenTracks[marker.options.stormId];
+            
+            if (shouldBeHidden) {
+                // Use the helper function if available, otherwise apply styles directly
+                if (window.AdeckReader && typeof window.AdeckReader.setMarkerVisibility === 'function') {
+                    window.AdeckReader.setMarkerVisibility(marker, false);
+                } else {
+                    // Directly apply styling to hide the marker
+                    if (marker.setStyle) {
+                        marker.setStyle({
+                            opacity: 0,
+                            fillOpacity: 0,
+                            stroke: false,
+                            fill: false
+                        });
+                    }
+                    
+                    // Hide the DOM element if it exists
+                    if (marker._path) {
+                        marker._path.style.display = 'none';
+                        marker._path.setAttribute('visibility', 'hidden');
+                    }
+                    
+                    // Set radius to 0 if possible
+                    if (marker.setRadius) {
+                        marker.setRadius(0);
+                    }
+                }
+                return; // Skip further styling
+            }
+            
+            // At this point, the marker is visible, apply zoom-based styling
+            // Scale marker size based on zoom level
+            if (marker.setRadius) {
+                let radius;
+                if (zoomLevel <= 4) {
+                    radius = 3;
+                } else if (zoomLevel <= 6) {
+                    radius = 4;
+                } else if (zoomLevel <= 8) {
+                    radius = 5;
+                } else if (zoomLevel <= 10) {
+                    radius = 6;
+                } else {
+                    radius = 7;
+                }
+                
+                // Store original radius if not already stored
+                if (!marker.options.originalRadius) {
+                    marker.options.originalRadius = marker.getRadius ? marker.getRadius() : 5;
+                }
+                
+                marker.setRadius(radius);
+            }
+            
+            // Ensure marker is visible
+            if (marker.setStyle) {
+                marker.setStyle({
+                    opacity: marker.options.originalOpacity || 1,
+                    fillOpacity: marker.options.originalFillOpacity || 1,
+                    stroke: true,
+                    fill: true
+                });
+            }
+            
+            // Make sure SVG element is visible
+            if (marker._path) {
+                marker._path.style.display = '';
+                marker._path.removeAttribute('visibility');
+            }
+        });
+    }
+    
+    // Update line widths
+    if (window.adeckLines && window.adeckLines.length > 0) {
+        const baseLineWidth = 2;
+        const selectedLineWidth = 3;
+        
+        // Calculate scale factor based on zoom
+        let scaleFactor;
+        if (zoomLevel <= 4) {
+            scaleFactor = 0.8;
+        } else if (zoomLevel <= 6) {
+            scaleFactor = 1.0;
+        } else if (zoomLevel <= 8) {
+            scaleFactor = 1.2;
+        } else if (zoomLevel <= 10) {
+            scaleFactor = 1.5;
+        } else {
+            scaleFactor = 1.8;
+        }
+        
+        window.adeckLines.forEach(line => {
+            // Skip if line is undefined
+            if (!line) return;
+            
+            const isSelected = selectedStormId && line.options && line.options.stormId === selectedStormId;
+            const width = isSelected ? selectedLineWidth * scaleFactor : baseLineWidth * scaleFactor;
+            
+            if (line.setStyle) {
+                line.setStyle({ weight: width });
+            }
+        });
+    }
+}
+
+// Existing ADECK file handler needs to call our displayAdeckTracks function
+// Update handleAdeckFileSelect or anywhere else that loads ADECK data
+function handleAdeckFileSelect(event) {
+    const files = event.target.files;
+    if (files.length > 0) {
+        loadAdeckFile(files[0]);
+    }
+}
+
+// Select a specific A-deck track and highlight it
+function selectAdeckTrack(stormId) {
+    // Store the selected storm ID
+    selectedStormId = stormId;
+    
+    // Find the selected storm model from the markers or lines
+    let selectedModel = null;
+    if (window.adeckLines && window.adeckLines.length) {
+        const selectedLine = window.adeckLines.find(line => line.stormId === stormId);
+        if (selectedLine) {
+            selectedModel = selectedLine.model;
+        }
+    }
+    
+    // Update currentModelName for future reference
+    if (selectedModel) {
+        currentModelName = selectedModel;
+    }
+    
+    // Update the visual state of all lines and markers
+    if (window.adeckLines) {
+        window.adeckLines.forEach(line => {
+            // Set line style based on selection state
+            line.setStyle({
+                opacity: line.stormId === stormId ? 1.0 : 0.3,
+                weight: line.stormId === stormId ? 3 : 2,
+                dashArray: line.stormId === stormId ? '' : '5, 5'
+            });
+            
+            // Update CSS classes
+            if (line.stormId === stormId) {
+                line._path.classList.add('selected-track');
+            } else {
+                line._path.classList.remove('selected-track');
+            }
+        });
+    }
+    
+    // Update marker opacity based on selection
+    if (window.adeckMarkers) {
+        window.adeckMarkers.forEach(marker => {
+            marker.setOpacity(marker.stormId === stormId ? 1.0 : 0.3);
+            
+            // Update z-index to bring selected markers to front
+            if (marker.stormId === stormId) {
+                const isFirstPoint = marker.pointIndex === 0;
+                marker.setZIndexOffset(isFirstPoint ? 1500 : 1000);
+            } else {
+                const isFirstPoint = marker.pointIndex === 0;
+                marker.setZIndexOffset(isFirstPoint ? 500 : 0);
+            }
+        });
+    }
+    
+    // Show notification about selected model
+    if (selectedModel) {
+        showNotification(`Selected ${selectedModel} forecast track`, 'info', 1500);
+    }
+    
+    // Update the UI to highlight the selected model in any model lists
+    highlightSelectedModel(selectedModel);
+    
+    // Apply zoom-appropriate symbology with the new selection
+    updateAdeckSymbology();
+    
+    return selectedModel;
+}
+
+// Helper function to highlight the selected model in UI elements
+function highlightSelectedModel(modelName) {
+    // If there's any model selection UI, update it
+    document.querySelectorAll('.adeck-model-button').forEach(btn => {
+        if (btn.dataset.model === modelName) {
+            btn.classList.add('selected');
+        } else {
+            btn.classList.remove('selected');
+        }
+    });
+    
+    // If there's a table with model rows, highlight the appropriate row
+    document.querySelectorAll('.model-row').forEach(row => {
+        if (row.dataset.model === modelName) {
+            row.classList.add('selected');
+        } else {
+            row.classList.remove('selected');
+        }
+    });
+}
+
+// Add a function to get model-specific colors
+function getModelColor(model) {
+    return window.AdeckReader.getModelColor(model);
+}
+
+// Check if a model is known (has a defined color)
+function isKnownModel(model) {
+    // Use AdeckReader's function if available
+    if (window.AdeckReader && typeof window.AdeckReader.isKnownModel === 'function') {
+        return window.AdeckReader.isKnownModel(model);
+    }
+    
+    // Fallback to checking if it has a color
+    return getModelColor(model) !== null;
+}
+
+// Check if a model should be shown by default
+function isDefaultModel(model) {
+    // Use AdeckReader's function if available
+    if (window.AdeckReader && typeof window.AdeckReader.isDefaultModel === 'function') {
+        return window.AdeckReader.isDefaultModel(model);
+    }
+    
+    // Fallback to a simple list of important models
+    const defaultModels = ['TVCN', 'TVCE', 'CONU', 'OFCL', 'OFCI'];
+    return defaultModels.includes(model);
+}
+
+// Add reopening functionality for the A-deck dialog
+function reopenAdeckDialog() {
+    if (window.adeckStorms && window.adeckStorms.length > 0) {
+        // Reopen the storm selection dialog with the existing data
+        showStormSelectionDialog(window.adeckStorms);
+        showNotification('A-deck selector reopened', 'info', 1500);
+    } else {
+        showNotification('No A-deck data available. Please load an A-deck file first.', 'warning');
+    }
+}
+
+// Update formatPopupContent function to handle ADECK time information
+window.formatAdeckTime = function(point) {
+    if (point.pointTime) {
+        let timeDisplay = formatPointTime(point.pointTime);
+        
+        // Add tau hours information if available
+        if (point.tau !== undefined) {
+            // For initial point (tau=0) use "Initial"
+            if (point.tau === 0) {
+                timeDisplay += " (Initial)";
+            } else {
+                timeDisplay += ` (Init+${point.tau}h)`;
+            }
+        }
+        return timeDisplay;
+    } else if (point.tau !== undefined && point.initTime) {
+        // Calculate actual time from init + tau
+        const pointTime = calculatePointTimeFromTau(point.initTime, point.tau);
+        if (pointTime) {
+            let timeDisplay = formatPointTime(pointTime);
+            if (point.tau === 0) {
+                timeDisplay += " (Initial)";
+            } else {
+                timeDisplay += ` (Init+${point.tau}h)`;
+            }
+            return timeDisplay;
+        }
+        // Fallback if we can't calculate the actual time
+        return `Forecast +${point.tau}h from init`;
+    } else if (point.tau !== undefined) {
+        return `Forecast +${point.tau}h`;
+    } else {
+        return "Time not specified";
+    }
+};
+
+// Make the helper functions available globally for custom popup templates
+window.isSpecified = isSpecified;
+window.formatParameter = formatParameter;
+
+// Update the default formatPopupContent function to display "Not Specified" for zero values
+if (!window.formatPopupContent) {
+    window.formatPopupContent = function(point, index) {
+        // Use the already implemented getHurricaneCategory function
+        const category = isSpecified(point.wind_speed) ? getHurricaneCategory(point.wind_speed) : null;
+        
+        // Check if this is a best track (either isBestTrack flag or model is BEST)
+        const isBestTrack = point.isBestTrack || point.model === 'BEST';
+        
+        // Handle both ADECK and regular CSV points
+        const timeSection = point.tau !== undefined ?
+            `<div class="metric">
+                <strong class="var-name">Init Time:</strong> 
+                <span class="var-value">${isBestTrack ? "N/A" : (point.initTime ? formatPointTime(new Date(point.initTime), true) : "Unknown")}</span>
+            </div>
+            <div class="metric">
+                <strong class="var-name">Valid Time:</strong> 
+                <span class="var-value">${window.formatAdeckTime(point)}</span>
+            </div>` :
+            `<div class="metric">
+                <strong class="var-name">Time:</strong> 
+                <span class="var-value">${formatPointTime(getPointTimestamp(point), true)}</span>
+            </div>`;
+        
+        const categoryBadgeStyle = category ?
+            `background-color: ${category.color}; color: #000;` :
+            `background-color: #999; color: #fff;`;
+            
+        const categoryName = category ? category.name : "Not Specified";
+        
+        return `
+            <div class="popup-content">
+                <div class="popup-header" style="background-color:${category ? category.color+'40' : '#99999940'}; border-color:${category ? category.color : '#999'}">
+                    <span class="popup-category" style="${categoryBadgeStyle}">${categoryName}</span>
+                    <strong>${point.cycloneName || 'Cyclone'}</strong>
+                    ${point.cycloneId ? `<small>${point.cycloneId}</small>` : ''}
+                </div>
+                <div class="popup-metrics">
+                    <div class="metric">
+                        <strong class="var-name">Position:</strong> 
+                        <span class="var-value">${point.latitude.toFixed(2)}°, ${point.longitude.toFixed(2)}°</span>
+                    </div>
+                    ${timeSection}
+                    <div class="metric">
+                        <strong class="var-name">Wind Speed:</strong> 
+                        <span class="var-value">${formatWindSpeed(point.wind_speed)}</span>
+                    </div>
+                    <div class="metric">
+                        <strong class="var-name">Pressure:</strong> 
+                        <span class="var-value">${formatPressure(point.mslp)}</span>
+                    </div>
+                    ${point.rmw ? `<div class="metric">
+                        <strong class="var-name">RMW:</strong> 
+                        <span class="var-value">${formatParameter(point.rmw, val => metersToDisplayUnits(val))}</span>
+                    </div>` : ''}
+                    ${point.roci ? `<div class="metric">
+                        <strong class="var-name">ROCI:</strong> 
+                        <span class="var-value">${formatParameter(point.roci, val => metersToDisplayUnits(val))}</span>
+                    </div>` : ''}
+                </div>
+            </div>
+        `;
+    };
+}
+
+// New function to deselect all points and clear visualizations
+function deselectAll() {
+    // Reset selected point
+    selectedPoint = null;
+    selectedPointIndex = null;
+    
+    // Remove floating dialog if it exists
+    removeFloatingDialog();
+    
+    // Clear all isochrones
+    clearIsochrones();
+    
+    // Clear all storm visualizations
+    clearAllStormVisualizations();
+    
+    // Deselect any track in ADECK data
+    if (selectedStormId !== null) {
+        selectedStormId = null;
+        
+        // Update visual state of ADECK tracks to show all equally
+        if (window.adeckLines) {
+            window.adeckLines.forEach(line => {
+                // Reset all lines to default style
+                line.setStyle({
+                    opacity: 0.8,
+                    weight: 2,
+                    dashArray: '5, 5'
+                });
+                
+                // Remove selected-track class
+                line._path.classList.remove('selected-track');
+            });
+        }
+        
+        // Reset all markers to full opacity
+        if (window.adeckMarkers) {
+            window.adeckMarkers.forEach(marker => {
+                marker.setOpacity(0.8);
+                // Reset z-index offsets
+                const isFirstPoint = marker.pointIndex === 0;
+                marker.setZIndexOffset(isFirstPoint ? 500 : 0);
+            });
+        }
+        
+        // Apply updated symbology
+        updateAdeckSymbology();
+    }
+    
+    // Reset appearance of all cyclone track points
+    resetPointAppearance();
+    
+    // Show notification
+    showNotification('All selections cleared', 'info', 1500);
+}
+
+// Handle document clicks to close floating dialog when clicking outside
+document.addEventListener('DOMContentLoaded', function() {
+    // ...existing code...
+    
+    // Add event handler for deselect-all button
+    const deselectAllBtn = document.getElementById('deselect-all');
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', function() {
+            deselectAll();
+        });
+    } else {
+        console.warn("Could not find deselect-all button, will create one");
+        
+        // Create deselect-all button if it doesn't exist
+        createDeselectAllButton();
+    }
+    
+    // ...existing code...
+});
+
+// Function to create the deselect-all button dynamically if it doesn't exist in the HTML
+function createDeselectAllButton() {
+    // Create the button element
+    const deselectBtn = document.createElement('button');
+    deselectBtn.id = 'deselect-all';
+    deselectBtn.className = 'control-btn deselect-btn';
+    deselectBtn.title = 'Clear all selections';
+    deselectBtn.innerHTML = '<i class="fas fa-times-circle"></i> Clear Selections';
+    
+    // Add click event listener
+    deselectBtn.addEventListener('click', deselectAll);
+    
+    // Find where to place the button - add to compact-controls
+    const compactControls = document.querySelector('.compact-controls');
+    if (compactControls) {
+        compactControls.appendChild(deselectBtn);
+        console.log("Added deselect-all button to compact-controls");
+    } else {
+        // If compact-controls doesn't exist, add button directly to the map container for easy access
+        const mapContainer = document.getElementById('map-container');
+        if (mapContainer) {
+            deselectBtn.style.position = 'absolute';
+            deselectBtn.style.top = '10px';
+            deselectBtn.style.right = '100px'; // Position to the left of potential other controls
+            deselectBtn.style.zIndex = '1000'; // High z-index to be above map
+            mapContainer.appendChild(deselectBtn);
+            console.log("Added deselect-all button to map container");
+        } else {
+            console.error("Could not find suitable container for deselect-all button");
+        }
+    }
+    
+    // Add button styles if needed
+    const style = document.createElement('style');
+    style.textContent = `
+        .deselect-btn {
+            background-color: rgba(40, 40, 40, 0.8);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        .deselect-btn:hover {
+            background-color: rgba(60, 60, 60, 0.9);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .deselect-btn i {
+            font-size: 14px;
+        }
+        
+        /* Use a red X icon */
+        .fa-times-circle:before {
+            content: "✖";
+            color: #ff6b6b;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function displayBdeckTrack(storm) {
+    // Clear existing markers and visualizations
+    markers.forEach(marker => map.removeLayer(marker));
+    markers = [];
+    clearAllStormVisualizations();
+
+    // Iterate through each point in the storm track
+    storm.points.forEach((point, index) => {
+        // Add a marker for each point
+        const marker = L.marker([point.latitude, point.longitude], {
+            title: `Point ${index}`,
+            icon: L.divIcon({
+                className: 'bdeck-marker',
+                html: `<div style="background-color: #0066cc; width: 10px; height: 10px; border-radius: 50%;"></div>`,
+                iconSize: [10, 10],
+                iconAnchor: [5, 5]
+            })
+        });
+
+        // Add click event to display storm attributes
+        marker.on('click', () => {
+            clearAllStormVisualizations();
+            displayStormAttributes(index);
+        });
+
+        marker.addTo(map);
+        markers.push(marker);
+    });
+
+    // Draw a polyline for the track
+    const trackLine = L.polyline(
+        storm.points.map(point => [point.latitude, point.longitude]),
+        {
+            color: '#0066cc',
+            weight: 2,
+            opacity: 0.8
+        }
+    ).addTo(map);
+
+    // Fit the map to the track bounds
+    const bounds = L.latLngBounds(storm.points.map(point => [point.latitude, point.longitude]));
+    map.fitBounds(bounds);
+}
+
+function loadBdeckTrack(bdeckData) {
+    // Parse the B-deck data into a storm object
+    const storm = parseBdeckData(bdeckData);
+
+    // Display the B-deck track on the map
+    displayBdeckTrack(storm);
+}
+
+function parseBdeckData(bdeckData) {
+    // Parse the B-deck data into a structured storm object
+    const lines = bdeckData.split('\n').filter(line => line.trim());
+    const points = lines.map(line => {
+        const fields = line.split(',').map(field => field.trim());
+        return {
+            latitude: parseFloat(fields[6]) / 10, // Convert to decimal degrees
+            longitude: -parseFloat(fields[7]) / 10, // Convert to decimal degrees
+            windSpeed: parseInt(fields[8], 10),
+            pressure: parseInt(fields[9], 10),
+            r34_ne: parseInt(fields[13], 10) || NaN,
+            r34_se: parseInt(fields[14], 10) || NaN,
+            r34_sw: parseInt(fields[15], 10) || NaN,
+            r34_nw: parseInt(fields[16], 10) || NaN
+        };
+    });
+
+    return { points };
+}
+
+// Calculate distance between two points in km using the Haversine formula
+function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the Earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// Update date labels based on zoom level and proximity
+function updateDateLabels() {
+    //console.log("Updating date labels for A-deck markers");
+    // Only proceed if we have data points
+    if (!data || data.length === 0) return;
+    
+    const zoom = map.getZoom();
+    const mapCenter = map.getCenter();
+    const threshold = 500; // Distance threshold in km
+    
+    // Check if map zoom is sufficient (zoom level 8 or higher)
+    const showLabels = zoom >= 8;
+    
+    // Update each marker's label
+    markers.forEach((marker, index) => {
+        const point = data[index];
+        const markerPosition = marker.getLatLng();
+        
+        // Calculate distance from map center to marker
+        const distance = calculateHaversineDistance(
+            mapCenter.lat, mapCenter.lng,
+            markerPosition.lat, markerPosition.lng
+        );
+        
+        // Get formatted date and time
+        let dateTimeLabel = "";
+        if (point.year_utc && point.month_utc && point.day_utc) {
+            const date = new Date(Date.UTC(
+                point.year_utc,
+                point.month_utc - 1, // JavaScript months are 0-indexed
+                point.day_utc,
+                point.hour_utc || 0,
+                point.minute_utc || 0
+            ));
+            
+            dateTimeLabel = date.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'UTC',
+                hour12: false
+            }) + " UTC";
+        } else if (point.tau !== undefined && point.initTime) {
+            // For ADECK points, calculate from init time and tau
+            const pointTime = calculatePointTimeFromTau(point.initTime, point.tau);
+            if (pointTime) {
+                dateTimeLabel = formatPointTime(pointTime);
+            }
+        }
+        
+        // Skip if we don't have a valid date
+        if (!dateTimeLabel) return;
+        
+        // Show label if zoomed in enough and within distance threshold
+        if (showLabels && distance <= threshold) {
+            // Create or update tooltip
+            if (!marker.getTooltip()) {
+                marker.bindTooltip(dateTimeLabel, {
+                    permanent: true,
+                    direction: 'top',
+                    className: 'date-time-label',
+                    offset: [0, -10]
+                });
+            }
+            marker.openTooltip();
+        } else {
+            // Hide tooltip when zoomed out or too far away
+            if (marker.getTooltip()) {
+                marker.closeTooltip();
+            }
+        }
+    });
+}
+
+// Add CSS for date labels to make them more visible
+document.addEventListener('DOMContentLoaded', function() {
+    // Add CSS for date/time labels if it doesn't exist yet
+    if (!document.getElementById('date-label-styles')) {
+        const style = document.createElement('style');
+        style.id = 'date-label-styles';
+        style.textContent = `
+            .date-time-label {
+                background-color: rgba(0, 0, 0, 0.7);
+                border: none;
+                border-radius: 3px;
+                color: white;
+                font-size: 11px;
+                padding: 3px 6px;
+                font-weight: bold;
+                white-space: nowrap;
+                pointer-events: none;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+            }
+            .date-time-label:before {
+                border-top-color: rgba(0, 0, 0, 0.7);
+            }
+            .leaflet-tooltip-top.date-time-label::before {
+                border-top-color: rgba(0, 0, 0, 0.7);
+            }
+        `;
+        document.head.appendChild(style);
+    }
 });

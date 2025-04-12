@@ -1474,6 +1474,9 @@ function parseBdeckFile(content) {
       const day = parseInt(dateTime.substring(6, 8));
       const hour = parseInt(dateTime.substring(8, 10));
       
+      // using this information parse an init time 
+      const initTime = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:00:00Z`;
+      console.log("Parsed init time:", initTime);
       // Create point object with all extracted data including R34 wind radii
       const point = {
         latitude,
@@ -1490,32 +1493,36 @@ function parseBdeckFile(content) {
         day_utc: day,
         hour_utc: hour,
         minute_utc: 0,
+        initTime,
         isBestTrack: true,
         model: "BEST"
       };
       
-      // Generate cyclone ID and check if it's a new storm
-      const cycloneId = `${basin}${cycloneNumber}${year}`;
+            // Generate cyclone ID and check if it's a new storm
+            const cycloneId = `${basin}${cycloneNumber}${year}`;
       
-      if (!currentStorm || currentStorm.id !== cycloneId) {
-        // Start a new storm
-        currentStorm = {
-          id: cycloneId,
-          cycloneId: cycloneId,
-          cycloneName: stormName,
-          basin: basin,
-          points: [point]
-        };
-        storms.push(currentStorm);
-      } else {
-        // Add point to existing storm
-        currentStorm.points.push(point);
-        
-        // Update storm name if it was empty before
-        if (!currentStorm.cycloneName && stormName) {
-          currentStorm.cycloneName = stormName;
-        }
-      }
+            if (!currentStorm || currentStorm.id !== cycloneId) {
+              // Start a new storm
+              currentStorm = {
+                id: cycloneId,
+                cycloneId: cycloneId,
+                cycloneName: stormName,
+                basin: basin,
+                // Add these two properties:
+                initTime: dateTime, // YYYYMMDDHH format needed for formatDateTime
+                model: "BEST",     // Explicitly set model to BEST
+                points: [point]
+              };
+              storms.push(currentStorm);
+            } else {
+              // Add point to existing storm
+              currentStorm.points.push(point);
+              
+              // Update storm name if it was empty before
+              if (!currentStorm.cycloneName && stormName) {
+                currentStorm.cycloneName = stormName;
+              }
+            }
     }
     
     return { storms, isBdeck: true, count: storms.length };

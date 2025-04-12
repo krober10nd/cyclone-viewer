@@ -42,6 +42,7 @@ const MODEL_DESCRIPTIONS = {
     'CARQ': 'CARQ/Best Track - Cyclone Analysis and Forecast Position data from NHC',
     'BEST': 'Official Best Track - Historical record of a tropical cyclone\'s location, maximum winds, central pressure, and size. Produced post-season after thorough analysis of all available data.',
     
+
     // Consensus Models
     'TVCN': 'Track Variable Consensus - Consensus of dynamical models (AVNO, ECMWF, UKMET, etc.)',
     'TVCE': 'Track Variable Consensus (Ensemble) - Consensus of ensemble runs from multiple models',

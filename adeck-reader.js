@@ -1345,60 +1345,6 @@ window.AdeckReader = {
             }
         });
     },
-
-    /**
-     * Get model color based on model name
-     * @param {string} model - Model name
-     * @returns {string} Color code for the model
-     */
-    getModelColor: function(model) {
-        // Model-specific colors based on type and importance
-        const modelColors = {
-            // Official forecast products
-            'OFCL': '#FFFFFF',
-            'OFCI': '#F0F0F0',
-            'CARQ': '#FFFFFF',
-            'BEST': '#FFFFFF',
-            
-            // Major global models
-            'AVNO': '#FF6B6B',
-            'GFS': '#FF6B6B', 
-            'GFSO': '#FF6B6B',
-            'HWRF': '#4D96FF',
-            'HMON': '#6BCB77',
-            'ECMF': '#FFD93D',
-            'ECMWF': '#FFD93D',
-            'EMXI': '#FFD93D',
-            'UKM': '#B983FF',
-            'UKMET': '#B983FF',
-            'UKMI': '#B983FF',
-            'CMC': '#FF9F45',
-            'NVGM': '#FF7D9B',
-            'CTCX': '#4D96FF',
-            
-            // Consensus models
-            'TVCN': '#00CCCC',
-            'TVCE': '#00AAAA',
-            'TVCX': '#009999',
-            'GUNA': '#AAFFAA',
-            'GUNS': '#88FF88',
-            'CONU': '#88DDDD',
-            'HCCA': '#AADDFF',
-            
-            // Statistical & simpler models
-            'DSHP': '#AAAAAA',
-            'SHIP': '#BBBBBB',
-            'LGEM': '#CCCCCC',
-            'BAMD': '#DDDDDD',
-            'BAMM': '#DDDDDD',
-            'BAMS': '#DDDDDD',
-            'LBAR': '#DDDDDD',
-            'XTRP': '#DDDDDD'
-        };
-        
-        // Return the color or a default color if model not found
-        return modelColors[model] || '#AAAAAA';
-    }
 };
 
 // Parse B-deck file - integrate with our custom parseBDeck function
@@ -1578,5 +1524,169 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 });
+
+// Define a centralized model color system
+const MODEL_COLORS = {
+    // Official forecasts
+    'OFCL': '#FFFFFF',  // Official forecast - white
+    'OFCI': '#EEEEEE',  // Official forecast interpolated - light gray
+    'CARQ': '#F0F0F0',  // CARQ - off-white
+    'BEST': '#FFFFFF',  // Best track - white
+    
+    // Major global models
+    'AVNO': '#FF6B6B',  // GFS - red
+    'AVNI': '#FF8C8C',  // GFS interpolated - lighter red
+    'GFS': '#FF6B6B',   // GFS (alias) - red
+    'EMXI': '#FFD93D',  // ECMWF - yellow
+    'EMX': '#FFD93D',   // ECMWF (alias) - yellow
+    'EMX2': '#FFEF99',  // ECMWF (member 2) - light yellow
+    'ECMWF': '#FFD93D', // ECMWF (alias) - yellow
+    'UKMI': '#B983FF',  // UKMET - purple
+    'UKM': '#B983FF',   // UKMET (alias) - purple
+    'UKX': '#B983FF',   // UKMET (alias) - purple
+    'UKXI': '#C9A3FF',  // UKMET interpolated - lighter purple
+    'UKX2': '#D9C3FF',  // UKMET (member 2) - light purple
+    'UKM2': '#D9C3FF',  // UKMET (member 2) - light purple
+    'CMC': '#FF9F45',   // Canadian model - orange
+    
+    // Hurricane-specific models
+    'HWRF': '#4D96FF',  // HWRF - blue
+    'HMON': '#6BCB77',  // HMON - green
+    'CTCX': '#4D96FF',  // COAMPS-TC - blue
+    
+    // Navy models
+    'NGPS': '#8B72BE',  // NAVGEM - lavender
+    'NGPI': '#A491CD',  // NAVGEM interpolated - light lavender
+    'NGP2': '#BEB1DD',  // NAVGEM (member 2) - very light lavender
+    'NVGM': '#8B72BE',  // NAVGEM (alias) - lavender
+    
+    // Statistical models
+    'DSHP': '#2DD4BF',  // SHIPS with Decay - teal
+    'SHIP': '#2DD4BF',  // SHIPS - teal  
+    'LGEM': '#38E54D',  // LGEM - bright green
+    'SHFR': '#79E8D0',  // SHIPS - light teal
+    'SHNS': '#79E8D0',  // SHIPS - light teal
+    'DRCL': '#79E8D0',  // Decay CLIPER - light teal
+    
+    // Consensus models
+    'TVCN': '#00AAFF',  // Track Variable Consensus - sky blue
+    'TVCE': '#33BBFF',  // Track Variable Consensus (ensemble) - lighter sky blue
+    'TVCX': '#66CCFF',  // Track Variable Consensus (no ECMWF) - very light sky blue
+    'CONU': '#874356',  // Consensus of US models - burgundy
+    'GUNA': '#F4838F',  // GUNA Consensus - pink
+    'GUNS': '#F4A8B0',  // GUNS Consensus - light pink 
+    'HCCA': '#F9B572',  // HCCA Consensus - peach
+    
+    // Trajectory models
+    'BAMD': '#457373',  // Beta and Advection Model (deep) - dark teal
+    'BAMM': '#5E8B8B',  // Beta and Advection Model (medium) - medium teal
+    'BAMS': '#77A3A3',  // Beta and Advection Model (shallow) - light teal
+    'LBAR': '#355764',  // LBAR - slate
+    'XTRP': '#607D8B',  // Extrapolation - blue gray
+    
+    // Statistical models
+    'CLIP': '#8D99AE',  // CLIPER - cool gray
+    'CLP5': '#A5B4CB',  // CLIPER (5-day) - light cool gray
+    'MRCL': '#C1CDE0'   // Modified CLIPER - very light cool gray
+};
+
+// Helper function to get model color from the centralized system
+function getModelColor(modelId) {
+    // First try the centralized color system
+    if (MODEL_COLORS[modelId]) {
+        return MODEL_COLORS[modelId];
+    }
+    
+    // If not found, try window.AdeckReader
+    if (window.AdeckReader && typeof window.AdeckReader.getModelColor === 'function') {
+        const color = window.AdeckReader.getModelColor(modelId);
+        if (color) return color;
+    }
+    
+    // Default color if not found
+    return '#00AAFF'; // Default blue color
+}
+
+// Update handleLabelVisibility function to use the consistent color system
+function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
+    if (!dateTimeLabel) return;
+    
+    if (showLabels) {
+        // First remove any existing tooltip to ensure clean styling
+        if (marker.getTooltip()) {
+            marker.unbindTooltip();
+        }
+        
+        // Determine the appropriate color based on marker model
+        let backgroundColor = 'rgba(0, 0, 0, 0.7)'; // Default color
+        let textColor = 'white';
+        
+        // For ADECK markers, get model color
+        if (marker.model) {
+            const modelColor = getModelColor(marker.model);
+            
+            // If we got a model color, use it
+            if (modelColor) {
+                // Convert hex color to rgba with opacity for better readability
+                if (modelColor.startsWith('#')) {
+                    backgroundColor = hexToRgba(modelColor, 0.85);
+                    textColor = getContrastingTextColor(modelColor);
+                } else {
+                    backgroundColor = modelColor;
+                    textColor = 'white';
+                }
+            }
+        }
+        
+        // Create unique class for this tooltip's model
+        const className = marker.model ? 
+            `date-time-label model-${marker.model.toLowerCase().replace(/[^a-z0-9]/g, '-')}` : 
+            'date-time-label';
+        
+        // Create tooltip with custom styling
+        const tooltipOptions = {
+            permanent: true,
+            direction: 'top',
+            className: className,
+            offset: [0, -10],
+            opacity: 0.9
+        };
+        
+        marker.bindTooltip(dateTimeLabel, tooltipOptions);
+        
+        // Apply colors directly to tooltip element after creation
+        marker.on('tooltipopen', function(e) {
+            const tooltipElement = e.tooltip._container;
+            if (tooltipElement) {
+                tooltipElement.style.backgroundColor = backgroundColor;
+                tooltipElement.style.color = textColor;
+                tooltipElement.style.border = '1px solid rgba(255,255,255,0.3)';
+                
+                // Apply color to tooltip arrow too
+                const arrow = tooltipElement.querySelector('.leaflet-tooltip-tip');
+                if (arrow) {
+                    arrow.style.border = 'none';
+                    arrow.style.backgroundColor = backgroundColor;
+                }
+            }
+        });
+        
+        marker.openTooltip();
+    } else {
+        // Hide tooltip when zoomed out
+        if (marker.getTooltip()) {
+            marker.closeTooltip();
+        }
+    }
+}
+
+// Make the color system available globally
+window.MODEL_COLORS = MODEL_COLORS;
+window.getModelColor = getModelColor;
+
+// Update AdeckReader to use the consistent color system if it exists
+if (window.AdeckReader) {
+    window.AdeckReader.getModelColor = getModelColor;
+}
 
 console.log("ADECK/BDECK Reader initialized");

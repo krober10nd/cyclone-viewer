@@ -34,6 +34,37 @@ let currentModelName = null; // Track the currently displayed model name
 // Add a global variable to track if the A-deck dialog was previously shown
 let adeckDialogWasShown = false;
 
+
+// Make the centralized MODEL_COLORS available globally for consistent usage
+window.MODEL_COLORS = MODEL_COLORS;
+
+DEFAULT_TRACK_COLOR = '#00AAFF'; // Default color for tracks
+
+// Update the getModelColor function to use the centralized color system
+function getModelColor(modelId) {
+    // First check our centralized color dictionary
+    if (MODEL_COLORS[modelId]) {
+        return MODEL_COLORS[modelId];
+    }
+    
+    // Fall back to AdeckReader's implementation if available
+    if (window.AdeckReader && typeof window.AdeckReader.getModelColor === 'function') {
+        const adeckColor = window.AdeckReader.getModelColor(modelId);
+        if (adeckColor) return adeckColor;
+    }
+    
+    // Default color if not found
+    console.warn(`Model ID ${modelId} not found in MODEL_COLORS. Using default color.`);
+    return '#00AAFF'; // Default blue color
+}
+
+// Update window.AdeckReader to use our centralized color system if it exists
+if (window.AdeckReader) {
+    window.AdeckReader.getModelColor = function(modelId) {
+        return MODEL_COLORS[modelId] || '#00AAFF';
+    };
+}
+
 // Add a model description database
 const MODEL_DESCRIPTIONS = {
     // Official Forecasts
@@ -81,10 +112,13 @@ const MODEL_DESCRIPTIONS = {
     'XTRP': 'Extrapolation - Simple linear extrapolation based on recent storm motion'
 };
 
+
+
 // Function to get model description
 function getModelDescription(modelName) {
     return MODEL_DESCRIPTIONS[modelName] || `${modelName} - No description available`;
 }
+
 
 // Function to display isochrones (+1h, +2h, +3h, ..., +6h) when a point is clicked
 function showIsochrones(pointIndex) {
@@ -681,12 +715,12 @@ function initializeMap() {
     map.on('zoomend', function() {
         updateAdeckSymbology();
         updateDateLabels();
-        console.log('Zoom changed, updating date labels');
+        //console.log('Zoom changed, updating date labels');
     });
     
     map.on('moveend', function() {
         updateDateLabels();
-        console.log("Map moved, updating date labels2");
+        //console.log("Map moved, updating date labels2");
     });
 
     // Wait for map to be ready before adding legend
@@ -2170,27 +2204,12 @@ function displayMarkers(fitBounds = true, modelName = null) {
         trackLine = null;
     }
     
-    // TODO: move this to a centralized location
-    // Model-specific colors (add more as needed)
-    const modelColors = {
-        'AVNO': '#FF6B6B',  // GFS - red
-        'HWRF': '#4D96FF',  // HWRF - blue
-        'HMON': '#6BCB77',  // HMON - green
-        'ECMF': '#FFD93D',  // ECMWF - yellow
-        'UKMET': '#B983FF', // UKMET - purple
-        'CMC': '#FF9F45',   // CMC - orange
-        'NVGM': '#FF6B6B',  // NAVGEM - red
-        'CTCX': '#4D96FF',  // COAMPS-TC - blue
-        'OFCL': '#FFFFFF',  // Official - white
-        'CARQ': '#FFFFFF',  // Best Track - white
-        'BEST': '#FFFFFF',  // Best Track - white
-        'default': '#00AAFF' // Default - light blue
-    };
-    
     // Get model color or use default
-    const trackColor = modelName && modelColors[modelName] ? 
-                       modelColors[modelName] : 
-                       modelColors.default;
+    const trackColor = modelName && MODEL_COLORS[modelName] ? 
+                       MODEL_COLORS[modelName] : 
+                          DEFAULT_TRACK_COLOR;
+    console.log(`Track color: ${trackColor}`);
+    console.log(`Default track color: ${DEFAULT_TRACK_COLOR}`);
     
     // Create an array of latlng points for the track line
     const points = data.map(point => [point.latitude, point.longitude]);
@@ -2208,7 +2227,7 @@ function displayMarkers(fitBounds = true, modelName = null) {
     }
 
     // Update date labels after creating the trackline 
-    console.log("Updating date labels");
+    //console.log("Updating date labels");
     updateDateLabels();
     
     // Add new markers
@@ -4598,7 +4617,8 @@ function showStormSelectionDialog(storms) {
                     modelSection.className = 'model-section';
                     
                     // Get model color 
-                    const modelColor = window.AdeckReader.getModelColor(modelId);
+                    //const modelColor = window.AdeckReader.getModelColor(modelId);
+                    const modelColor = MODEL_COLORS[modelId];
                     
                     // Create model header with color indicator
                     const modelHeader = document.createElement('div');
@@ -4908,316 +4928,6 @@ function makeEnhancedDraggable(element) {
     }
     
     return element;
-}
-
-// Add this function to handle ADECK track display
-function displayAdeckTracks(storms, selectedStormId = null, defaultModelsOnly = true) {
-    // Remove existing tracks first
-    removeAdeckTracks();
-    
-    if (!storms || !Array.isArray(storms) || storms.length === 0) {
-        console.log("No ADECK tracks to display");
-        return;
-    }
-
-    // Add a flag to track if we had to fall back to showing all models
-    let usedFallback = false;
-
-    window.currentModelFilterPreference = defaultModelsOnly;
-    
-    // Preserve the currently selected model category
-    const categoryDropdown = document.querySelector('.model-category-dropdown');
-    const selectedCategory = categoryDropdown ? categoryDropdown.value : 'all';
-    
-    // Filter storms based on the model display setting
-    let filteredStorms;
-   
-    console.log(`Filtering storms: defaultModelsOnly = ${defaultModelsOnly}, selectedCategory = ${selectedCategory}`);
-    if (defaultModelsOnly) {
-        // Try to show default models first
-        filteredStorms = storms.filter(storm => isDefaultModel(storm.model));
-        
-        // If no default models, fall back to all known models
-        if (filteredStorms.length === 0) {
-            filteredStorms = storms.filter(storm => isKnownModel(storm.model));
-            console.log("No default models found, showing all known models");
-            usedFallback = true; // Track that we used the fallback
-        }
-    } else {
-        // Show all known models
-        filteredStorms = storms.filter(storm => isKnownModel(storm.model));
-    }
-    
-    // Apply model category filter if not "all"
-    if (selectedCategory !== 'all') {
-        // Get the model category definition
-        const modelCategories = [
-            { id: 'all', name: 'All Models' },
-            { 
-                id: 'track_intensity', 
-                name: 'Track & Intensity Models', 
-                models: [
-                    'OFCL', 'OFCI', 'CARQ',
-                    'AVNO', 'AVNI', 'GFS',
-                    'GFDI', 'GFDL', 'GFDT', 'GFDN',
-                    'UKMI', 'UKM', 'UKX', 'UKXI', 'UKX2', 'UKM2',
-                    'CMC', 'HWRF', 'HMON',
-                    'EMXI', 'EMX', 'EMX2', 'ECMWF',
-                    'NGPS', 'NGPI', 'NGP2',
-                    'DSHP', 'SHIP', 'LGEM', 'SHFR', 'SHNS', 'DRCL'
-                ]
-            },
-            {
-                id: 'track_only',
-                name: 'Track-Only Models',
-                models: [
-                    'TVCN', 'TVCE', 'TVCX',
-                    'CONU', 'GUNA', 'GUNS', 'HCCA',
-                    'BAMD', 'BAMM', 'BAMS', 'LBAR', 'XTRP',
-                    'CLIP', 'CLP5', 'DRCL', 'MRCL'
-                ]
-            }
-        ];
-        
-        const categoryDef = modelCategories.find(cat => cat.id === selectedCategory);
-        
-        if (categoryDef && categoryDef.models) {
-            const beforeCount = filteredStorms.length;
-            filteredStorms = filteredStorms.filter(storm => categoryDef.models.includes(storm.model));
-            console.log(`Applied ${selectedCategory} category filter: ${filteredStorms.length} of ${beforeCount} storms match`);
-        }
-    }
-    
-    if (filteredStorms.length === 0) {
-        console.log("No tracks with known models to display");
-        showNotification("No recognized forecast models to display", "warning");
-        return;
-    }
-    
-    console.log(`Displaying ${filteredStorms.length} recognized ADECK tracks (filtered from ${storms.length} total)`);
-
-    // Store the current filter preference to preseve it for future use
-    if (!usedFallback) {
-        window.lastModelFilterPreference = defaultModelsOnly;
-    }
-    
-    // Store the current category selection
-    window.lastModelCategory = selectedCategory;
-    
-    // Process storms to add special styling for first points
-    const processedStorms = window.AdeckReader 
-        ? window.AdeckReader.processTracksForDisplay(filteredStorms, defaultModelsOnly)
-        : filteredStorms;
-    
-    // Create a layer group for ADECK tracks if it doesn't exist
-    if (!window.adeckLayerGroup) {
-        window.adeckLayerGroup = L.layerGroup().addTo(map);
-    }
-    
-    // Store references to all markers
-    window.adeckMarkers = [];
-    window.adeckLines = [];
-    
-    // Determine if any storm is selected
-    const isAnyStormSelected = selectedStormId !== null;
-    
-    // Display each storm track
-    processedStorms.forEach(storm => {
-        const isSelected = selectedStormId === storm.id;
-        const opacity = isAnyStormSelected ? (isSelected ? 1.0 : 0.3) : 0.8;
-        const zIndexOffset = isSelected ? 500 : 0;
-        
-        // Get the model-specific color for the track line
-        const modelColor = window.AdeckReader.getModelColor(storm.model);
-        
-        // Skip if model color is not defined (should not happen due to filtering)
-        if (!modelColor) return;
-        
-        // Create polyline for the track
-        const points = storm.points.map(point => [point.latitude, point.longitude]);
-        if (points.length > 0) {
-            const trackLine = L.polyline(points, {
-                color: modelColor, // Keep track lines colored by model for differentiation
-                weight: isSelected ? 3 : 2,
-                opacity: opacity,
-                smoothFactor: 1,
-                className: `adeck-track ${isSelected ? 'selected-track' : ''} model-track-${storm.model}`,
-                dashArray: isSelected ? '' : '5, 5',
-                stormId: storm.id // Add this to identify each track's storm ID
-            }).addTo(window.adeckLayerGroup);
-            
-            // Add metadata to the line
-            trackLine.stormId = storm.id;
-            trackLine.model = storm.model;
-            
-            // Add model description as a tooltip
-            if (MODEL_DESCRIPTIONS[storm.model]) {
-                trackLine.bindTooltip(`${storm.model}: ${MODEL_DESCRIPTIONS[storm.model]}`, {
-                    sticky: true,
-                    opacity: 0.9,
-                    className: 'model-tooltip'
-                });
-            }
-            
-            // Add click handler
-            trackLine.on('click', function() {
-                selectAdeckTrack(storm.id);
-                
-                // Update the model description in the dialog if it exists
-                updateModelDescriptionInDialog(storm.model);
-            });
-            
-            window.adeckLines.push(trackLine);
-        }
-        
-        // Create markers for each point - using the intensity-based category coloring
-        storm.points.forEach((point, index) => {
-            // Use hurricane category based on wind speed (same as CSV tracks)
-            const category = getHurricaneCategory(point.wind_speed);
-            
-            // Determine marker size based on category and if it's the first point
-            const iconSize = index === 0 ? (category.radius * 2) + 2 : category.radius * 2;
-            
-            // Create marker icon using category color instead of model color
-            const icon = L.divIcon({
-                className: `hurricane-marker category-${category.name.toLowerCase().replace(/\s+/g, '-')} ${index === 0 ? 'first-point' : ''}`,
-                iconSize: [iconSize, iconSize],
-                html: `<div style="background-color: ${category.color}; width: 100%; height: 100%; border-radius: 50%; 
-                      ${index === 0 ? 'border: 2px solid #FFFFFF;' : ''}" 
-                      class="${index === 0 ? 'first-point-marker' : ''}"></div>`,
-                iconAnchor: [iconSize/2, iconSize/2]
-            });
-            
-            // Create the marker
-            const marker = L.marker([point.latitude, point.longitude], {
-                icon: icon,
-                opacity: opacity,
-                title: `${storm.model} - ${category.name} - ${formatWindSpeed(point.wind_speed)}`,
-                zIndexOffset: index === 0 ? zIndexOffset + 1000 : zIndexOffset
-            }).addTo(window.adeckLayerGroup);
-            
-            // Add metadata to the marker
-            marker.stormId = storm.id;
-            marker.model = storm.model;
-            marker.pointIndex = index;
-            marker.category = category.name;
-            marker.windSpeed = point.wind_speed;
-            
-            // Calculate actual time for this point using init time and tau (forecast hour)
-            const pointTime = calculatePointTimeFromTau(storm.initTime, point.tau);
-            marker.pointTime = pointTime;
-            
-            // Also store the time data directly on the point object for easier access
-            point.pointTime = pointTime;
-            
-            // Add special styling for first point
-            if (index === 0) {
-                marker.on('add', function() {
-                    const markerElement = this.getElement();
-                    if (markerElement) {
-                        markerElement.classList.add('track-first-point');
-                        markerElement.style.zIndex = 1000;
-                    }
-                });
-            }
-            
-            // Add click handler for marker
-            marker.on('click', function() {
-                selectAdeckTrack(storm.id);
-                
-                // Update the model description in the dialog if it exists
-                updateModelDescriptionInDialog(storm.model);
-                
-                // Create popup using the same formatPopupContent function as CSV tracks
-                if (window.formatPopupContent) {
-                    // Add model name and actual time to the point data for display in popup
-                    const pointData = {
-                        ...point,
-                        cycloneId: storm.cycloneId,
-                        cycloneName: storm.model, // Just use the model name directly
-                        pointTime: pointTime,     // Add the calculated time
-                        initTime: storm.initTime  // Add the init time for reference
-                    };
-                    const content = window.formatPopupContent(pointData, index);
-                    
-                    // Create popup and position it 100km to the right
-                    const popup = L.popup()
-                        .setContent(content);
-                        
-                    marker.bindPopup(popup);
-                    window.positionPopupToRight(marker, popup);
-                } else {
-                    // Fallback simple popup if formatPopupContent isn't available
-                    // Format time information - show both init and forecast time
-                    let timeDisplay = "";
-                    if (pointTime) {
-                        timeDisplay = `<br>Valid: ${formatPointTime(pointTime)}`;
-                        if (index === 0) {
-                            timeDisplay += " (Initial)";
-                        } else {
-                            timeDisplay += ` (+${point.tau}h)`;
-                        }
-                    } else if (point.tau !== undefined) {
-                        timeDisplay = `<br>Forecast: +${point.tau}h`;
-                    }
-                    
-                    // Format intensity and pressure with "Not Specified" for zero/missing values
-                    const intensityDisplay = formatWindSpeed(point.wind_speed);
-                    const pressureDisplay = formatPressure(point.mslp);
-                    
-                    // Determine which category label to show based on wind speed
-                    let categoryDisplay = "Intensity: Not Specified";
-                    let categoryColor = "#999"; // Default gray for unspecified
-                    if (isSpecified(point.wind_speed)) {
-                        const category = getHurricaneCategory(point.wind_speed);
-                        categoryDisplay = category.name;
-                        categoryColor = category.color;
-                    }
-                    
-                    const popupContent = `
-                        <div class="adeck-popup">
-                            <b>${storm.model || 'Unknown Model'}</b><br>
-                            <small class="model-description">${getModelDescription(storm.model)}</small>
-                            <hr>
-                            <div class="intensity-badge" style="background-color:${categoryColor}">
-                                ${categoryDisplay}
-                            </div>
-                            Position: ${point.latitudeFormatted || point.latitude.toFixed(1)}, 
-                                     ${point.longitudeFormatted || Math.abs(point.longitude).toFixed(1)}°${point.longitude >= 0 ? 'E' : 'W'}
-                            <br>Init: ${storm.initTime ? formatPointTime(new Date(storm.initTime), true) : "Unknown"}${timeDisplay}
-                            <br>Wind: ${intensityDisplay}
-                            <br>Pressure: ${pressureDisplay}
-                        </div>
-                    `;
-                    
-                    const popup = L.popup().setContent(popupContent);
-                    marker.bindPopup(popup);
-                    window.positionPopupToRight(marker, popup);
-                }
-            });
-            
-            window.adeckMarkers.push(marker);
-        });
-    });
-    
-    // Apply zoom-appropriate symbology
-    if (typeof updateAdeckSymbology === 'function') {
-        updateAdeckSymbology();
-    }
-    
-    // Fit bounds to include all tracks if no specific track is selected
-    if (!isAnyStormSelected && window.adeckMarkers.length > 0) {
-        const group = L.featureGroup(window.adeckMarkers);
-        // only if fix view is not set 
-        if (!window.isViewFixed) {
-            map.fitBounds(group.getBounds(), { padding: [50, 50] });
-        }
-    }
-    
-    // Record that the A-deck dialog was shown
-    if (typeof adeckDialogWasShown !== 'undefined') {
-        adeckDialogWasShown = true;
-    }
 }
 
 // Function to update the model description in the dialog
@@ -5849,6 +5559,7 @@ document.addEventListener('DOMContentLoaded', function() {
     map.on('zoomend', function() {
         console.log('Map zoom changed to', map.getZoom());
         updateAdeckSymbology();
+        // if not b deck 
         updateDateLabels();
     });
     
@@ -7077,7 +6788,7 @@ function calculatePointTimeFromTau(initTimeString, tau) {
 
 // Format time display for ADECK points with improved clarity
 function formatPointTime(pointTime, includeDate = true) {
-    console.log("Formatting point time:", pointTime);
+    //console.log("Formatting point time:", pointTime);
     if (!pointTime) return "Unknown";
     
     try {
@@ -7401,7 +7112,7 @@ function displayAdeckTracks(storms, selectedStormId = null, defaultModelsOnly = 
         const zIndexOffset = isSelected ? 500 : 0;
         
         // Get the model-specific color for the track line
-        const modelColor = window.AdeckReader.getModelColor(storm.model);
+        const modelColor = MODEL_COLORS[storm.model] || getModelColor(storm.model);
         
         // Skip if model color is not defined (should not happen due to filtering)
         if (!modelColor) return;
@@ -7425,7 +7136,7 @@ function displayAdeckTracks(storms, selectedStormId = null, defaultModelsOnly = 
             
             // Add model description as a tooltip
             if (MODEL_DESCRIPTIONS[storm.model]) {
-                trackLine.bindTooltip(`${storm.model}: ${MODEL_DESCRIPTIONS[storm.model]}`, {
+                trackLine.bindTooltip(`${storm.model}`, {
                     sticky: true,
                     opacity: 0.9,
                     className: 'model-tooltip'
@@ -7751,11 +7462,6 @@ function highlightSelectedModel(modelName) {
     });
 }
 
-// Add a function to get model-specific colors
-function getModelColor(model) {
-    return window.AdeckReader.getModelColor(model);
-}
-
 // Check if a model is known (has a defined color)
 function isKnownModel(model) {
     // Use AdeckReader's function if available
@@ -8057,7 +7763,6 @@ const labelMaxZoom = 14; // Hide labels at zoom level 14 and above
 
 // Update date labels based on zoom level and viewport visibility
 function updateDateLabels() {
-    console.log('Inside updateDateLabels function');
     const zoom = map.getZoom();
     const bounds = map.getBounds();
     
@@ -8114,11 +7819,11 @@ function updateDateLabels() {
             if (!marker) return;
             
             const markerPosition = marker.getLatLng();
-            console.log("Marker position: ", markerPosition);
+            //console.log("Marker position: ", markerPosition);
 
             // get the latest bounds from the map 
             const bounds = map.getBounds();
-            console.log("Map bounds: ", bounds);
+            //console.log("Map bounds: ", bounds);
             
             // Skip processing if marker is outside current viewport
             //if (!bounds.contains(markerPosition)) {
@@ -8129,15 +7834,15 @@ function updateDateLabels() {
             
             let dateTimeLabel = "";
             // For A-deck tracks, get time from pointTime or calculate it from initTime and tau
-            console.log("Marker point time: ", marker.pointTime);
+            //console.log("Marker point time: ", marker.pointTime);
             if (marker.pointTime) {
                 dateTimeLabel = formatPointTime(marker.pointTime);
             } else if (marker.stormId && window.adeckStorms) {
-                console.log("Finding storm by ID: ", marker.stormId);
+                //console.log("Finding storm by ID: ", marker.stormId);
                 // Try to find the correct storm and point
                 const storm = window.adeckStorms.find(s => s.id === marker.stormId);
                 if (storm && storm.points && marker.pointIndex !== undefined) {
-                    console.log("Found storm3: ", storm);
+                    //console.log("Found storm3: ", storm);
                     const point = storm.points[marker.pointIndex];
 
                     dateTimeLabel = formatPointTime(point.initTime);
@@ -8164,6 +7869,7 @@ function updateDateLabels() {
 }
 
 // Helper function to handle label visibility with model-specific colors
+// Update handleLabelVisibility function to use centralized color system
 function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
     if (!dateTimeLabel) return;
     
@@ -8176,39 +7882,21 @@ function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
         // Determine the appropriate color based on marker model
         let backgroundColor = 'rgba(0, 0, 0, 0.7)'; // Default color
         let textColor = 'white';
-        let modelColor = null;
         
-        // For ADECK markers, get model color
+        // For ADECK markers, get model color from centralized system
         if (marker.model) {
-            console.log(`Getting color for model: ${marker.model}`);
+            const modelColor = MODEL_COLORS[marker.model];
             
-            // Try getting color from AdeckReader first
-            if (window.AdeckReader && typeof window.AdeckReader.getModelColor === 'function') {
-                modelColor = window.AdeckReader.getModelColor(marker.model);
-                console.log(`AdeckReader color for ${marker.model}: ${modelColor}`);
-            }
-            
-            // If that didn't work, try from the MODEL_DESCRIPTIONS object
-            if (!modelColor && window.MODEL_DESCRIPTIONS) {
-                const modelObj = Object.entries(window.MODEL_DESCRIPTIONS)
-                    .find(([key]) => key === marker.model);
-                if (modelObj && modelObj[1] && modelObj[1].color) {
-                    modelColor = modelObj[1].color;
-                    console.log(`MODEL_DESCRIPTIONS color for ${marker.model}: ${modelColor}`);
+            // If we have a model color, use it
+            if (modelColor) {
+                // Convert hex color to rgba with opacity for better readability
+                if (modelColor.startsWith('#')) {
+                    backgroundColor = hexToRgba(modelColor, 0.85);
+                    textColor = getContrastingTextColor(modelColor);
+                } else {
+                    backgroundColor = modelColor;
+                    textColor = 'white';
                 }
-            }
-        }
-        
-        // If we got a model color, use it
-        if (modelColor) {
-            // Convert hex color to rgba with opacity for better readability
-            if (modelColor.startsWith('#')) {
-                backgroundColor = hexToRgba(modelColor, 0.85);
-                textColor = getContrastingTextColor(modelColor);
-            } else {
-                backgroundColor = modelColor;
-                // Default to white text on unknown colors
-                textColor = 'white';
             }
         }
         
@@ -8217,7 +7905,7 @@ function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
             `date-time-label model-${marker.model.toLowerCase().replace(/[^a-z0-9]/g, '-')}` : 
             'date-time-label';
         
-        // Create tooltip with custom styling
+        // Rest of the function remains the same...
         const tooltipOptions = {
             permanent: true,
             direction: 'top',
@@ -8253,40 +7941,6 @@ function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
         }
     }
 }
-// Helper function to get model color from any available source
-function getModelColorFromAnywhere(modelId) {
-    let color = null;
-    
-    // Try from AdeckReader
-    if (window.AdeckReader && typeof window.AdeckReader.getModelColor === 'function') {
-        color = window.AdeckReader.getModelColor(modelId);
-        if (color) return color;
-    }
-    
-    // Try from window.modelColors
-    if (window.modelColors && window.modelColors[modelId]) {
-        return window.modelColors[modelId];
-    }
-    
-    // Try from MODEL_DESCRIPTIONS
-    const modelColors = {
-        'AVNO': '#FF6B6B',  // GFS - red
-        'HWRF': '#4D96FF',  // HWRF - blue
-        'HMON': '#6BCB77',  // HMON - green
-        'ECMF': '#FFD93D',  // ECMWF - yellow
-        'UKMET': '#B983FF', // UKMET - purple
-        'CMC': '#FF9F45',   // CMC - orange
-        'NVGM': '#FF6B6B',  // NAVGEM - red
-        'CTCX': '#4D96FF',  // COAMPS-TC - blue
-        'OFCL': '#FFFFFF',  // Official - white
-        'CARQ': '#FFFFFF',  // CARQ - white
-        'BEST': '#FFFFFF'   // Best Track - white
-    };
-    
-    return modelColors[modelId] || '#00AAFF'; // Default blue color
-}
-
-
 // Helper function to convert hex to rgba
 function hexToRgba(hex, alpha = 1) {
     // Remove # if present

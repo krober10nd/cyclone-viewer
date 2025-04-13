@@ -4098,8 +4098,6 @@ function formatPressure(pressureHPa, defaultText = "Not Specified") {
     return pressureHPa + ' hPa';
 }
 
-
-// Update loadAdeckFile to set the isBdeckTrackLoaded flag
 async function loadAdeckFile(file) {
     try {
         // Show loading indicator
@@ -4123,7 +4121,6 @@ async function loadAdeckFile(file) {
         // Set the global flag based on file type
         isBdeckTrackLoaded = isBdeck;
         console.log(`File is ${isBdeck ? 'B-DECK' : 'A-DECK'}, isBdeckTrackLoaded = ${isBdeckTrackLoaded}`);
-        console.log("isBdeckTrackLoaded:", isBdeckTrackLoaded);
         
         // Parse ADECK/BDECK content with robust error handling
         let result;
@@ -4131,6 +4128,14 @@ async function loadAdeckFile(file) {
             if (isBdeck) {
                 result = window.AdeckReader.parseBdeckFile(content);
                 isBdeckTrackLoaded = true;
+                
+                // Add flag to result to mark as B-deck data
+                if (result && result.storms) {
+                    result.isBdeck = true;
+                    result.storms.forEach(storm => {
+                        storm.isBestTrack = true;
+                    });
+                }
             } else {
                 result = window.AdeckReader.parseAdeckFile(content);
                 isBdeckTrackLoaded = false;
@@ -4147,7 +4152,6 @@ async function loadAdeckFile(file) {
             result = { storms: [], count: 0 };
         } else if (!result.storms) {
             console.error("Parser did not return a valid storms array:", result);
-            // Create a valid result object with an empty storms array
             result.storms = [];
             result.count = 0;
         }
@@ -4161,8 +4165,41 @@ async function loadAdeckFile(file) {
         // Store storms data in the global window object
         window.adeckStorms = result.storms;
         
-        // Show storm selection dialog
+        // Show the storm selection dialog regardless of whether it's A-DECK or B-DECK
         showStormSelectionDialog(window.adeckStorms);
+        
+        // For B-deck files, immediately minimize the dialog
+        if (isBdeck) {
+            console.log("B-DECK file detected, minimizing selection dialog...");
+            
+            // Display the best track without waiting for user selection
+            displayAdeckTracks(result.storms, null, false);
+            
+            // Get the dialog and minimize it using existing functionality
+            const dialog = document.getElementById('adeck-storm-selection');
+            if (dialog) {
+                // Use the existing toggleDialogMinimize function
+                toggleDialogMinimize(dialog);
+                
+                // Add a special class to indicate it's a B-deck dialog
+                dialog.classList.add('bdeck-dialog');
+                
+                // Add a badge to indicate this is a best track
+                const header = dialog.querySelector('.dialog-header');
+                if (header) {
+                    const badgeContainer = document.createElement('div');
+                    badgeContainer.className = 'track-toggle-container';
+                    badgeContainer.innerHTML = '<span class="bdeck-badge">BEST TRACK</span>';
+                    
+                    const controls = header.querySelector('.dialog-controls');
+                    if (controls) {
+                        controls.insertBefore(badgeContainer, controls.firstChild);
+                    } else {
+                        header.appendChild(badgeContainer);
+                    }
+                }
+            }
+        }
 
         // Show success message with appropriate file type
         const fileType = isBdeck ? 'B-DECK' : 'A-DECK';
@@ -4219,14 +4256,14 @@ function showStormSelectionDialog(storms) {
     
     // Add B-deck indicator if in B-deck mode
     console.log("isBdeckTrackLoaded:", isBdeckTrackLoaded); 
-    if (isBdeckTrackLoaded) {
-        console.log("B-deck track loaded, adding indicator");
-        const bdeckIndicator = document.createElement('div');
-        bdeckIndicator.className = 'bdeck-indicator';
-        bdeckIndicator.innerHTML = '<span class="bdeck-badge">BEST</span>';
-        bdeckIndicator.title = 'Currently displaying a Best Track (B-deck). Init time and model selection disabled.';
-        header.insertBefore(bdeckIndicator, header.querySelector('.dialog-controls'));
-    }
+    //if (isBdeckTrackLoaded) {
+        //console.log("B-deck track loaded, adding indicator");
+        //const bdeckIndicator = document.createElement('div');
+        //bdeckIndicator.className = 'bdeck-indicator';
+        //bdeckIndicator.innerHTML = '<span class="bdeck-badge">BEST</span>';
+        //bdeckIndicator.title = 'Currently displaying a Best Track (B-deck). Init time and model selection disabled.';
+        //header.insertBefore(bdeckIndicator, header.querySelector('.dialog-controls'));
+    //}
     
     // Add the "Fix View" button
     const fixViewButton = document.createElement('button');

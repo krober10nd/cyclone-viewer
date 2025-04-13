@@ -1549,10 +1549,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Try to initialize right away
     window.initializeAdeckDialog();
     
-    // Set up event listener for zoom events to maintain visibility
+    // Set p event listener for zoom events to maintain visibility
     if (window.map) {
         window.map.on('zoomend', function() {
             window.AdeckReader.applyStoredVisibility();
+            // Make sure both zoom and pan events update date labels
+            updateAdeckSymbology();
+            updateDateLabels();
+            console.log("Zoom changed, updating date labels2");
+        });
+    
+        map.on('moveend', function() {
+            updateDateLabels();
+            console.log("Map moved, updating date labels2");
         });
     }
     

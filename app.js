@@ -5605,6 +5605,8 @@ function displayBdeckTrack(storm) {
     markers = [];
     clearAllStormVisualizations();
 
+    data = storm.points;
+
     // Iterate through each point in the storm track
     storm.points.forEach((point, index) => {
         // Add a marker for each point
@@ -5617,6 +5619,12 @@ function displayBdeckTrack(storm) {
                 iconAnchor: [5, 5]
             })
         });
+
+        // Store point index for reference 
+        markker.pointIndex = index; 
+
+        // Add B-deckm odel info 
+        marker.model = 'BEST';
 
         // Add click event to display storm attributes
         marker.on('click', () => {
@@ -5641,48 +5649,9 @@ function displayBdeckTrack(storm) {
     // Fit the map to the track bounds
     const bounds = L.latLngBounds(storm.points.map(point => [point.latitude, point.longitude]));
     map.fitBounds(bounds);
-}
 
-function loadBdeckTrack(bdeckData) {
-    // Parse the B-deck data into a storm object
-    const storm = parseBdeckData(bdeckData);
-
-    // Display the B-deck track on the map
-    displayBdeckTrack(storm);
-}
-
-function parseBdeckData(bdeckData) {
-    // Parse the B-deck data into a structured storm object
-    const lines = bdeckData.split('\n').filter(line => line.trim());
-    const points = lines.map(line => {
-        const fields = line.split(',').map(field => field.trim());
-
-        // Extract date/time from B-deck format (fields 0-3 have year, month, day, hour)
-        const year = parseInt(fields[0], 10);
-        const month = parseInt(fields[1], 10);
-        const day = parseInt(fields[2], 10);
-        const hour = parseInt(fields[3], 10);
-        console.log(`Parsed date: ${year}-${month}-${day} ${hour}:00`);
-
-       return {
-            latitude: parseFloat(fields[6]) / 10, // Convert to decimal degrees
-            longitude: -parseFloat(fields[7]) / 10, // Convert to decimal degrees
-            windSpeed: parseInt(fields[8], 10),
-            pressure: parseInt(fields[9], 10),
-            r34_ne: parseInt(fields[13], 10) || NaN,
-            r34_se: parseInt(fields[14], 10) || NaN,
-            r34_sw: parseInt(fields[15], 10) || NaN,
-            r34_nw: parseInt(fields[16], 10) || NaN,
-            // Add datetimefields in format expected by updateDatetimeLables 
-            year_utc: year,
-            month_utc: month,
-            day_utc: day,
-            hour_utc: hour,
-            minute_utc: 0
-        };
-    });
-
-    return { points };
+    // update date labels 
+    updateDateLabels();
 }
 
 // Document ready event handling
@@ -7905,7 +7874,7 @@ function displayAdeckTracks(storms, selectedStormId = null, defaultModelsOnly = 
     if (typeof updateAdeckSymbology === 'function') {
         updateAdeckSymbology();
     }
-    
+
     // Fit bounds to include all tracks if no specific track is selected
     if (!isAnyStormSelected && window.adeckMarkers.length > 0) {
         const group = L.featureGroup(window.adeckMarkers);
@@ -8401,6 +8370,7 @@ function deselectAll() {
 // Handle document clicks to close floating dialog when clicking outside
 document.addEventListener('DOMContentLoaded', function() {
     // ...existing code...
+    // TODO fill in here
     
     // Add event handler for deselect-all button
     const deselectAllBtn = document.getElementById('deselect-all');
@@ -8414,7 +8384,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Create deselect-all button if it doesn't exist
         createDeselectAllButton();
     }
-    
+   
+    // TODO fill in here
     // ...existing code...
 });
 
@@ -8485,85 +8456,6 @@ function createDeselectAllButton() {
     document.head.appendChild(style);
 }
 
-function displayBdeckTrack(storm) {
-    // Clear existing markers and visualizations
-    markers.forEach(marker => map.removeLayer(marker));
-    markers = [];
-    clearAllStormVisualizations();
-
-    // Iterate through each point in the storm track
-    storm.points.forEach((point, index) => {
-        // Add a marker for each point
-        const marker = L.marker([point.latitude, point.longitude], {
-            title: `Point ${index}`,
-            icon: L.divIcon({
-                className: 'bdeck-marker',
-                html: `<div style="background-color: #0066cc; width: 10px; height: 10px; border-radius: 50%;"></div>`,
-                iconSize: [10, 10],
-                iconAnchor: [5, 5]
-            })
-        });
-
-        // Store point index for reference 
-        marker.pointIndex = index;
-
-        // Add click event to display storm attributes
-        marker.on('click', () => {
-            clearAllStormVisualizations();
-            displayStormAttributes(index);
-        });
-
-        marker.addTo(map);
-        markers.push(marker);
-    });
-
-    // Draw a polyline for the track
-    const trackLine = L.polyline(
-        storm.points.map(point => [point.latitude, point.longitude]),
-        {
-            color: '#0066cc',
-            weight: 2,
-            opacity: 0.8
-        }
-    ).addTo(map);
-
-    // Fit the map to the track bounds
-    const bounds = L.latLngBounds(storm.points.map(point => [point.latitude, point.longitude]));
-    map.fitBounds(bounds);
-
-    // Call updateDateLabels 
-    console.log("Updating date labels in b-deck track");
-    updateDateLabels();
-}
-
-function loadBdeckTrack(bdeckData) {
-    // Parse the B-deck data into a storm object
-    const storm = parseBdeckData(bdeckData);
-
-    // Display the B-deck track on the map
-    displayBdeckTrack(storm);
-}
-
-function parseBdeckData(bdeckData) {
-    // Parse the B-deck data into a structured storm object
-    const lines = bdeckData.split('\n').filter(line => line.trim());
-    const points = lines.map(line => {
-        const fields = line.split(',').map(field => field.trim());
-        return {
-            latitude: parseFloat(fields[6]) / 10, // Convert to decimal degrees
-            longitude: -parseFloat(fields[7]) / 10, // Convert to decimal degrees
-            windSpeed: parseInt(fields[8], 10),
-            pressure: parseInt(fields[9], 10),
-            r34_ne: parseInt(fields[13], 10) || NaN,
-            r34_se: parseInt(fields[14], 10) || NaN,
-            r34_sw: parseInt(fields[15], 10) || NaN,
-            r34_nw: parseInt(fields[16], 10) || NaN
-        };
-    });
-
-    return { points };
-}
-
 // Calculate distance between two points in km using the Haversine formula
 function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // Radius of the Earth in km
@@ -8589,6 +8481,9 @@ function updateDateLabels() {
     const showLabels = zoom >= labelMinZoom && zoom < labelMaxZoom;
     
     // First handle regular CSV tracks
+    console.log("Updating date labels for CSV tracks");
+    // print the data 
+    console.log("Data: ", data);
     if (data && data.length > 0 && markers && markers.length > 0) {
         // Process markers from CSV tracks (existing code)
         markers.forEach((marker, index) => {

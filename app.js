@@ -5289,19 +5289,34 @@ function updateAdeckSymbology() {
             // Skip if marker is undefined or null
             if (!marker) return;
             
+            // Get the storm ID either directly from marker or from options
+            const stormId = marker.stormId || (marker.options && marker.options.stormId);
+            
             // Check if this marker belongs to a hidden track
-            const shouldBeHidden = marker.options && 
-                                  marker.options.stormId && 
+            const shouldBeHidden = stormId && 
                                   window.AdeckReader && 
                                   window.AdeckReader.hiddenTracks && 
-                                  window.AdeckReader.hiddenTracks[marker.options.stormId];
+                                  window.AdeckReader.hiddenTracks[stormId];
             
             if (shouldBeHidden) {
+                // First close any tooltip that might be open
+                if (marker.getTooltip && marker.getTooltip()) {
+                    marker.closeTooltip();
+                }
+                
                 // Use the helper function if available, otherwise apply styles directly
                 if (window.AdeckReader && typeof window.AdeckReader.setMarkerVisibility === 'function') {
                     window.AdeckReader.setMarkerVisibility(marker, false);
                 } else {
-                    // Directly apply styling to hide the marker
+                    // Make sure the marker is fully hidden
+                    marker.setOpacity(0);
+                    
+                    // Hide the DOM element directly
+                    if (marker._icon) {
+                        marker._icon.style.display = 'none';
+                    }
+                    
+                    // If it's a path-based marker (circle, etc)
                     if (marker.setStyle) {
                         marker.setStyle({
                             opacity: 0,
@@ -5311,7 +5326,7 @@ function updateAdeckSymbology() {
                         });
                     }
                     
-                    // Hide the DOM element if it exists
+                    // Hide the DOM element if it exists as a path
                     if (marker._path) {
                         marker._path.style.display = 'none';
                         marker._path.setAttribute('visibility', 'hidden');
@@ -5321,8 +5336,28 @@ function updateAdeckSymbology() {
                     if (marker.setRadius) {
                         marker.setRadius(0);
                     }
+                    
+                    // Remove from the map completely as a last resort
+                    if (!marker._removed && window.adeckLayerGroup) {
+                        window.adeckLayerGroup.removeLayer(marker);
+                        marker._removed = true; // Track removal state
+                    }
                 }
                 return; // Skip further styling
+            } else {
+                // Restore visibility if previously hidden
+                if (marker._removed && window.adeckLayerGroup) {
+                    marker.addTo(window.adeckLayerGroup);
+                    marker._removed = false;
+                }
+                
+                // Make marker visible again
+                marker.setOpacity(marker.options.originalOpacity || 1);
+                
+                // Show the DOM element
+                if (marker._icon) {
+                    marker._icon.style.display = '';
+                }
             }
             
             // At this point, the marker is visible, apply zoom-based styling
@@ -5390,25 +5425,37 @@ function updateAdeckSymbology() {
             // Skip if line is undefined
             if (!line) return;
             
-            const isSelected = selectedStormId && line.options && line.options.stormId === selectedStormId;
-            const width = isSelected ? selectedLineWidth * scaleFactor : baseLineWidth * scaleFactor;
+            // Check if this line belongs to a hidden track
+            const stormId = line.stormId || (line.options && line.options.stormId);
+            const shouldBeHidden = stormId && 
+                                  window.AdeckReader && 
+                                  window.AdeckReader.hiddenTracks && 
+                                  window.AdeckReader.hiddenTracks[stormId];
             
-            if (line.setStyle) {
-                line.setStyle({ weight: width });
+            if (shouldBeHidden) {
+                // Hide the line
+                if (!line._removed && window.adeckLayerGroup) {
+                    window.adeckLayerGroup.removeLayer(line);
+                    line._removed = true;
+                }
+                return;
+            } else {
+                // Restore visibility if previously hidden
+                if (line._removed && window.adeckLayerGroup) {
+                    line.addTo(window.adeckLayerGroup);
+                    line._removed = false;
+                }
+                
+                const isSelected = selectedStormId && stormId === selectedStormId;
+                const width = isSelected ? selectedLineWidth * scaleFactor : baseLineWidth * scaleFactor;
+                
+                if (line.setStyle) {
+                    line.setStyle({ weight: width });
+                }
             }
         });
     }
 }
-
-// Existing ADECK file handler needs to call our displayAdeckTracks function
-// Update handleAdeckFileSelect or anywhere else that loads ADECK data
-function handleAdeckFileSelect(event) {
-    const files = event.target.files;
-    if (files.length > 0) {
-        loadAdeckFile(files[0]);
-    }
-}
-
 // Select a specific A-deck track and highlight it
 function selectAdeckTrack(stormId) {
     // Store the selected storm ID
@@ -7605,126 +7652,6 @@ function removeAdeckTracks() {
     }
 }
 
-// Function to update A-deck track symbology based on zoom level
-function updateAdeckSymbology() {
-    const zoomLevel = map.getZoom();
-    
-    // Update markers
-    if (window.adeckMarkers && window.adeckMarkers.length > 0) {
-        window.adeckMarkers.forEach(marker => {
-            // Skip if marker is undefined or null
-            if (!marker) return;
-            
-            // Check if this marker belongs to a hidden track
-            const shouldBeHidden = marker.options && 
-                                  marker.options.stormId && 
-                                  window.AdeckReader && 
-                                  window.AdeckReader.hiddenTracks && 
-                                  window.AdeckReader.hiddenTracks[marker.options.stormId];
-            
-            if (shouldBeHidden) {
-                // Use the helper function if available, otherwise apply styles directly
-                if (window.AdeckReader && typeof window.AdeckReader.setMarkerVisibility === 'function') {
-                    window.AdeckReader.setMarkerVisibility(marker, false);
-                } else {
-                    // Directly apply styling to hide the marker
-                    if (marker.setStyle) {
-                        marker.setStyle({
-                            opacity: 0,
-                            fillOpacity: 0,
-                            stroke: false,
-                            fill: false
-                        });
-                    }
-                    
-                    // Hide the DOM element if it exists
-                    if (marker._path) {
-                        marker._path.style.display = 'none';
-                        marker._path.setAttribute('visibility', 'hidden');
-                    }
-                    
-                    // Set radius to 0 if possible
-                    if (marker.setRadius) {
-                        marker.setRadius(0);
-                    }
-                }
-                return; // Skip further styling
-            }
-            
-            // At this point, the marker is visible, apply zoom-based styling
-            // Scale marker size based on zoom level
-            if (marker.setRadius) {
-                let radius;
-                if (zoomLevel <= 4) {
-                    radius = 3;
-                } else if (zoomLevel <= 6) {
-                    radius = 4;
-                } else if (zoomLevel <= 8) {
-                    radius = 5;
-                } else if (zoomLevel <= 10) {
-                    radius = 6;
-                } else {
-                    radius = 7;
-                }
-                
-                // Store original radius if not already stored
-                if (!marker.options.originalRadius) {
-                    marker.options.originalRadius = marker.getRadius ? marker.getRadius() : 5;
-                }
-                
-                marker.setRadius(radius);
-            }
-            
-            // Ensure marker is visible
-            if (marker.setStyle) {
-                marker.setStyle({
-                    opacity: marker.options.originalOpacity || 1,
-                    fillOpacity: marker.options.originalFillOpacity || 1,
-                    stroke: true,
-                    fill: true
-                });
-            }
-            
-            // Make sure SVG element is visible
-            if (marker._path) {
-                marker._path.style.display = '';
-                marker._path.removeAttribute('visibility');
-            }
-        });
-    }
-    
-    // Update line widths
-    if (window.adeckLines && window.adeckLines.length > 0) {
-        const baseLineWidth = 2;
-        const selectedLineWidth = 3;
-        
-        // Calculate scale factor based on zoom
-        let scaleFactor;
-        if (zoomLevel <= 4) {
-            scaleFactor = 0.8;
-        } else if (zoomLevel <= 6) {
-            scaleFactor = 1.0;
-        } else if (zoomLevel <= 8) {
-            scaleFactor = 1.2;
-        } else if (zoomLevel <= 10) {
-            scaleFactor = 1.5;
-        } else {
-            scaleFactor = 1.8;
-        }
-        
-        window.adeckLines.forEach(line => {
-            // Skip if line is undefined
-            if (!line) return;
-            
-            const isSelected = selectedStormId && line.options && line.options.stormId === selectedStormId;
-            const width = isSelected ? selectedLineWidth * scaleFactor : baseLineWidth * scaleFactor;
-            
-            if (line.setStyle) {
-                line.setStyle({ weight: width });
-            }
-        });
-    }
-}
 
 // Existing ADECK file handler needs to call our displayAdeckTracks function
 // Update handleAdeckFileSelect or anywhere else that loads ADECK data
@@ -8235,79 +8162,89 @@ function updateDateLabels() {
         });
     }
 }
+
 // Helper function to handle label visibility with model-specific colors
 function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
     if (!dateTimeLabel) return;
     
     if (showLabels) {
+        // First remove any existing tooltip to ensure clean styling
+        if (marker.getTooltip()) {
+            marker.unbindTooltip();
+        }
+        
         // Determine the appropriate color based on marker model
         let backgroundColor = 'rgba(0, 0, 0, 0.7)'; // Default color
         let textColor = 'white';
+        let modelColor = null;
         
         // For ADECK markers, get model color
         if (marker.model) {
-            console.log(`Marker model: ${marker.model}`);
-            // Get model color from AdeckReader if available
-            let modelColor = null;
+            console.log(`Getting color for model: ${marker.model}`);
+            
+            // Try getting color from AdeckReader first
             if (window.AdeckReader && typeof window.AdeckReader.getModelColor === 'function') {
                 modelColor = window.AdeckReader.getModelColor(marker.model);
-            } else if (window.modelColors && window.modelColors[marker.model]) {
-                modelColor = window.modelColors[marker.model];
+                console.log(`AdeckReader color for ${marker.model}: ${modelColor}`);
             }
             
-            if (modelColor) {
-                console.log(`Model color: ${modelColor}`);
-                // Convert hex color to rgba with opacity for better readability
-                if (modelColor.startsWith('#')) {
-                    backgroundColor = hexToRgba(modelColor, 0.85);
-                    
-                    // Determine if text should be black or white based on background brightness
-                    textColor = getContrastingTextColor(modelColor);
-                } else {
-                    backgroundColor = modelColor;
+            // If that didn't work, try from the MODEL_DESCRIPTIONS object
+            if (!modelColor && window.MODEL_DESCRIPTIONS) {
+                const modelObj = Object.entries(window.MODEL_DESCRIPTIONS)
+                    .find(([key]) => key === marker.model);
+                if (modelObj && modelObj[1] && modelObj[1].color) {
+                    modelColor = modelObj[1].color;
+                    console.log(`MODEL_DESCRIPTIONS color for ${marker.model}: ${modelColor}`);
                 }
             }
-        } else if (marker.pointIndex !== undefined && window.currentModelName) {
-            // For CSV tracks with current model name
-            if (window.modelColors && window.modelColors[window.currentModelName]) {
-                const modelColor = window.modelColors[window.currentModelName];
+        }
+        
+        // If we got a model color, use it
+        if (modelColor) {
+            // Convert hex color to rgba with opacity for better readability
+            if (modelColor.startsWith('#')) {
                 backgroundColor = hexToRgba(modelColor, 0.85);
                 textColor = getContrastingTextColor(modelColor);
+            } else {
+                backgroundColor = modelColor;
+                // Default to white text on unknown colors
+                textColor = 'white';
             }
         }
         
-        // Create a unique class for this model's labels
+        // Create unique class for this tooltip's model
         const className = marker.model ? 
-            `date-time-label model-${marker.model.toLowerCase().replace(/\s+/g, '-')}` : 
+            `date-time-label model-${marker.model.toLowerCase().replace(/[^a-z0-9]/g, '-')}` : 
             'date-time-label';
         
-        // Create or update tooltip with inline style for color
-        if (!marker.getTooltip()) {
-            const tooltipOptions = {
-                permanent: true,
-                direction: 'top',
-                className: className,
-                offset: [0, -10]
-            };
-            
-            marker.bindTooltip(dateTimeLabel, tooltipOptions);
-            
-            // Apply colors directly to the tooltip element after it's created
-            marker.on('tooltipopen', function(e) {
-                const tooltipElement = e.tooltip._container;
-                if (tooltipElement) {
-                    tooltipElement.style.backgroundColor = backgroundColor;
-                    tooltipElement.style.color = textColor;
-                    tooltipElement.style.border = '1px solid rgba(255,255,255,0.3)';
-                    
-                    // Also color the tooltip arrow
-                    const arrow = tooltipElement.querySelector('.leaflet-tooltip-tip');
-                    if (arrow) {
-                        arrow.style.backgroundColor = backgroundColor;
-                    }
+        // Create tooltip with custom styling
+        const tooltipOptions = {
+            permanent: true,
+            direction: 'top',
+            className: className,
+            offset: [0, -10],
+            opacity: 0.9
+        };
+        
+        marker.bindTooltip(dateTimeLabel, tooltipOptions);
+        
+        // Apply colors directly to tooltip element after creation
+        marker.on('tooltipopen', function(e) {
+            const tooltipElement = e.tooltip._container;
+            if (tooltipElement) {
+                tooltipElement.style.backgroundColor = backgroundColor;
+                tooltipElement.style.color = textColor;
+                tooltipElement.style.border = '1px solid rgba(255,255,255,0.3)';
+                
+                // Apply color to tooltip arrow too
+                const arrow = tooltipElement.querySelector('.leaflet-tooltip-tip');
+                if (arrow) {
+                    arrow.style.border = 'none';
+                    arrow.style.backgroundColor = backgroundColor;
                 }
-            });
-        }
+            }
+        });
+        
         marker.openTooltip();
     } else {
         // Hide tooltip when zoomed out
@@ -8316,6 +8253,39 @@ function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
         }
     }
 }
+// Helper function to get model color from any available source
+function getModelColorFromAnywhere(modelId) {
+    let color = null;
+    
+    // Try from AdeckReader
+    if (window.AdeckReader && typeof window.AdeckReader.getModelColor === 'function') {
+        color = window.AdeckReader.getModelColor(modelId);
+        if (color) return color;
+    }
+    
+    // Try from window.modelColors
+    if (window.modelColors && window.modelColors[modelId]) {
+        return window.modelColors[modelId];
+    }
+    
+    // Try from MODEL_DESCRIPTIONS
+    const modelColors = {
+        'AVNO': '#FF6B6B',  // GFS - red
+        'HWRF': '#4D96FF',  // HWRF - blue
+        'HMON': '#6BCB77',  // HMON - green
+        'ECMF': '#FFD93D',  // ECMWF - yellow
+        'UKMET': '#B983FF', // UKMET - purple
+        'CMC': '#FF9F45',   // CMC - orange
+        'NVGM': '#FF6B6B',  // NAVGEM - red
+        'CTCX': '#4D96FF',  // COAMPS-TC - blue
+        'OFCL': '#FFFFFF',  // Official - white
+        'CARQ': '#FFFFFF',  // CARQ - white
+        'BEST': '#FFFFFF'   // Best Track - white
+    };
+    
+    return modelColors[modelId] || '#00AAFF'; // Default blue color
+}
+
 
 // Helper function to convert hex to rgba
 function hexToRgba(hex, alpha = 1) {

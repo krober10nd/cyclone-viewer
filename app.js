@@ -3957,78 +3957,6 @@ function updateLoadingCount(count) {
     }
 }
 
-// Load ADECK file
-async function loadAdeckFile(file) {
-    try {
-        // Show loading indicator
-        document.getElementById('loading-indicator').classList.remove('hidden');
-        
-        console.log("Loading A/B-DECK file:", file.name);
-        
-        // Read file content
-        const content = await readFileContent(file);
-        
-        console.log("File content loaded, parsing...");
-        
-        // Check if content is valid
-        if (!content || typeof content !== 'string' || content.trim() === '') {
-            throw new Error("File appears to be empty or invalid");
-        }
-        
-        // Simplified check for B-deck file - only look for BEST in the model column
-        // B-deck files will have "BEST" as the model (5th column)
-        const isBdeck = content.includes(',BEST,') || content.includes(', BEST,');
-        
-        // Parse ADECK/BDECK content with robust error handling
-        let result;
-        try {
-            if (isBdeck) {
-                result = window.AdeckReader.parseBdeckFile(content);
-            } else {
-                result = window.AdeckReader.parseAdeckFile(content);
-            }
-            console.log("Parse result:", result);
-        } catch (parseError) {
-            console.error("Error in parsing file:", parseError);
-            throw new Error(`Failed to parse A/B-DECK file: ${parseError.message}`);
-        }
-        
-        // Ensure result is an object with a storms array
-        if (!result) {
-            console.error("Parser returned", result);
-            result = { storms: [], count: 0 };
-        } else if (!result.storms) {
-            console.error("Parser did not return a valid storms array:", result);
-            // Create a valid result object with an empty storms array
-            result.storms = [];
-            result.count = 0;
-        }
-        
-        if (result.storms.length === 0) {
-            throw new Error("No valid storms found in the A/B-DECK file.");
-        }
-        
-        console.log(`Found ${result.storms.length} storms in A/B-DECK file`);
-        
-        // Store storms data in the global window object
-        window.adeckStorms = result.storms;
-        
-        // Show storm selection dialog
-        showStormSelectionDialog(window.adeckStorms);
-
-        // Show success message with appropriate file type
-        const fileType = result.isBdeck ? 'B-DECK' : 'A-DECK';
-        showNotification(`Found ${result.storms.length} storm track${result.storms.length > 1 ? 's' : ''} in ${fileType} file`, 'success', 2000);
-        
-    } catch (error) {
-        console.error("Error loading A/B-DECK file:", error);
-        showNotification(`Error: ${error.message}`, 'error');
-    } finally {
-        // Hide loading indicator
-        document.getElementById('loading-indicator').classList.add('hidden');
-    }
-}
-
 // Read file content as text
 function readFileContent(file) {
     return new Promise((resolve, reject) => {
@@ -4151,7 +4079,85 @@ function formatPressure(pressureHPa, defaultText = "Not Specified") {
     return pressureHPa + ' hPa';
 }
 
-// Show storm selection dialog - updated to include init time selector
+
+// Update loadAdeckFile to set the isBdeckTrackLoaded flag
+async function loadAdeckFile(file) {
+    try {
+        // Show loading indicator
+        document.getElementById('loading-indicator').classList.remove('hidden');
+        
+        console.log("Loading A/B-DECK file:", file.name);
+        
+        // Read file content
+        const content = await readFileContent(file);
+        
+        console.log("File content loaded, parsing...");
+        
+        // Check if content is valid
+        if (!content || typeof content !== 'string' || content.trim() === '') {
+            throw new Error("File appears to be empty or invalid");
+        }
+        
+        // Simplified check for B-deck file - only look for BEST in the model column
+        const isBdeck = content.includes(',BEST,') || content.includes(', BEST,');
+        
+        // Set the global flag based on file type
+        isBdeckTrackLoaded = isBdeck;
+        console.log(`File is ${isBdeck ? 'B-DECK' : 'A-DECK'}, isBdeckTrackLoaded = ${isBdeckTrackLoaded}`);
+        console.log("isBdeckTrackLoaded:", isBdeckTrackLoaded);
+        
+        // Parse ADECK/BDECK content with robust error handling
+        let result;
+        try {
+            if (isBdeck) {
+                result = window.AdeckReader.parseBdeckFile(content);
+                isBdeckTrackLoaded = true;
+            } else {
+                result = window.AdeckReader.parseAdeckFile(content);
+                isBdeckTrackLoaded = false;
+            }
+            console.log("Parse result:", result);
+        } catch (parseError) {
+            console.error("Error in parsing file:", parseError);
+            throw new Error(`Failed to parse A/B-DECK file: ${parseError.message}`);
+        }
+        
+        // Ensure result is an object with a storms array
+        if (!result) {
+            console.error("Parser returned", result);
+            result = { storms: [], count: 0 };
+        } else if (!result.storms) {
+            console.error("Parser did not return a valid storms array:", result);
+            // Create a valid result object with an empty storms array
+            result.storms = [];
+            result.count = 0;
+        }
+        
+        if (result.storms.length === 0) {
+            throw new Error("No valid storms found in the A/B-DECK file.");
+        }
+        
+        console.log(`Found ${result.storms.length} storms in A/B-DECK file`);
+        
+        // Store storms data in the global window object
+        window.adeckStorms = result.storms;
+        
+        // Show storm selection dialog
+        showStormSelectionDialog(window.adeckStorms);
+
+        // Show success message with appropriate file type
+        const fileType = isBdeck ? 'B-DECK' : 'A-DECK';
+        showNotification(`Found ${result.storms.length} storm track${result.storms.length > 1 ? 's' : ''} in ${fileType} file`, 'success', 2000);
+        
+    } catch (error) {
+        console.error("Error loading A/B-DECK file:", error);
+        showNotification(`Error: ${error.message}`, 'error');
+    } finally {
+        // Hide loading indicator
+        document.getElementById('loading-indicator').classList.add('hidden');
+    }
+}
+
 function showStormSelectionDialog(storms) {
     // Close any existing dialog
     if (adeckStormSelectionDialog) {
@@ -4191,10 +4197,18 @@ function showStormSelectionDialog(storms) {
     </div>
     `;
     dialog.appendChild(header);
-
-
-
-
+    
+    // Add B-deck indicator if in B-deck mode
+    console.log("isBdeckTrackLoaded:", isBdeckTrackLoaded); 
+    if (isBdeckTrackLoaded) {
+        console.log("B-deck track loaded, adding indicator");
+        const bdeckIndicator = document.createElement('div');
+        bdeckIndicator.className = 'bdeck-indicator';
+        bdeckIndicator.innerHTML = '<span class="bdeck-badge">BEST TRACK LOADED</span>';
+        bdeckIndicator.title = 'Currently displaying a Best Track (B-deck). Init time and model selection disabled.';
+        header.insertBefore(bdeckIndicator, header.querySelector('.dialog-controls'));
+    }
+    
     // Add the "Fix View" button
     const fixViewButton = document.createElement('button');
     fixViewButton.textContent = 'Fix View';
@@ -4227,11 +4241,6 @@ function showStormSelectionDialog(storms) {
 
     // Append the Fix View button to the dialog
     dialog.appendChild(fixViewButton);
-
-
-
-
-
     
     // Show cyclone ID if available
     if (firstStorm && firstStorm.cycloneId) {
@@ -4259,11 +4268,35 @@ function showStormSelectionDialog(storms) {
         window.AdeckReader.displayTracksByInitTime(storms, selectedInitTime);
     });
     
+    // Add disabled class if in B-deck mode
+    if (isBdeckTrackLoaded) {
+        initTimeSelector.classList.add('disabled-for-bdeck');
+        const disabledMsg = document.createElement('div');
+        disabledMsg.className = 'disabled-message';
+        disabledMsg.textContent = 'Init time selection disabled for Best Track';
+        disabledMsg.style.fontSize = '11px';
+        disabledMsg.style.fontStyle = 'italic';
+        disabledMsg.style.color = '#999';
+        initTimeSelector.appendChild(disabledMsg);
+    }
+    
     dialog.appendChild(initTimeSelector);
     
     // Add Model Category selector
     const modelCategorySelector = document.createElement('div');
     modelCategorySelector.className = 'model-category-filter';
+    
+    // Add disabled class if in B-deck mode
+    if (isBdeckTrackLoaded) {
+        modelCategorySelector.classList.add('disabled-for-bdeck');
+        const disabledMsg = document.createElement('div');
+        disabledMsg.className = 'disabled-message';
+        disabledMsg.textContent = 'Model selection disabled for Best Track';
+        disabledMsg.style.fontSize = '11px';
+        disabledMsg.style.fontStyle = 'italic';
+        disabledMsg.style.color = '#999';
+        modelCategorySelector.appendChild(disabledMsg);
+    }
     
     // Define the model categories - same as in AdeckReader for consistency
     const modelCategories = [
@@ -4303,6 +4336,12 @@ function showStormSelectionDialog(storms) {
     // Create dropdown
     const categoryDropdown = document.createElement('select');
     categoryDropdown.className = 'model-category-dropdown';
+    
+    // Disable the dropdown if in B-deck mode
+    if (isBdeckTrackLoaded) {
+        categoryDropdown.disabled = true;
+        categoryDropdown.title = 'Model selection disabled for Best Track';
+    }
     
     // Function to update category dropdown with track counts for current init time
     const updateCategoryDropdownCounts = (selectedInitTime) => {
@@ -4355,88 +4394,109 @@ function showStormSelectionDialog(storms) {
         initTimeDropdown.addEventListener('change', function() {
             updateCategoryDropdownCounts(this.value);
         });
+        
+        // Disable the dropdown if in B-deck mode
+        if (isBdeckTrackLoaded) {
+            initTimeDropdown.disabled = true;
+            initTimeDropdown.title = 'Init time selection disabled for Best Track';
+        }
     }
     
-    // Add change handler for dropdown
-    //categoryDropdown.addEventListener('change', function() {
-        //const selectedCategory = this.value;
-       // const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
-       // 
-       // // Filter storms by both init time and category
-       // let filteredStorms = storms;
-       // 
-       // // First filter by init time if selected
-       // if (selectedInitTime) {
-       //     filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
-       // }
-       // 
-       // // Then filter by model category if not "all"
-       // if (selectedCategory !== 'all') {
-       //     const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
-       //     filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
-       // }
-       // 
-       // // Display the filtered tracks
-       // displayAdeckTracks(filteredStorms, selectedStormId);
-       // 
-       // // Show notification
-       // showNotification(`Displaying ${selectedCategory} model tracks`, 'info', 1500);
-    //});
-        const categories = [
-            { id: 'track_intensity', name: 'Track & Intensity Models' },
-            { id: 'track_only', name: 'Track-Only Models' },
-            { id: 'all', name: 'All Models' }
-        ];
+    modelCategorySelector.appendChild(categoryDropdown);
+    dialog.appendChild(modelCategorySelector);
+    
+    // Add radio buttons for model categories - disabled in B-deck mode
+    const categories = [
+        { id: 'track_intensity', name: 'Track & Intensity Models' },
+        { id: 'track_only', name: 'Track-Only Models' },
+        { id: 'all', name: 'All Models' }
+    ];
+    
+    let selectedCategory = 'all'; // Default category
+    
+    categories.forEach(category => {
+        const label = document.createElement('label');
+        label.className = 'category-checkbox-label';
+    
+        const checkbox = document.createElement('input');
+        checkbox.type = 'radio';
+        checkbox.name = 'model-category';
+        checkbox.value = category.id;
+        checkbox.checked = category.id === selectedCategory;
+        checkbox.className = 'category-checkbox';
         
-        let selectedCategory = 'all'; // Default category
-        
-        categories.forEach(category => {
-            const label = document.createElement('label');
-            label.className = 'category-checkbox-label';
-        
-            const checkbox = document.createElement('input');
-            checkbox.type = 'radio';
-            checkbox.name = 'model-category';
-            checkbox.value = category.id;
-            checkbox.checked = category.id === selectedCategory;
-            checkbox.className = 'category-checkbox';
-        
-            checkbox.addEventListener('change', function() {
-                if (this.checked) {
-                    selectedCategory = this.value;
-                
-                    // Filter storms by both init time and category
-                    const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
-                    let filteredStorms = storms;
-                
-                    // First filter by init time if selected
-                    if (selectedInitTime) {
-                        filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
-                    }
-                
-                    // Then filter by model category if not "all"
-                    if (selectedCategory !== 'all') {
-                        const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
-                        filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
-                    }
-                
-                    // Display the filtered tracks
-                    displayAdeckTracks(filteredStorms, selectedStormId);
-                
-                    // Show notification
-                    showNotification(`Displaying ${category.name} model tracks`, 'info', 1500);
+        // Disable checkbox if in B-deck mode
+        if (isBdeckTrackLoaded) {
+            checkbox.disabled = true;
+            checkbox.title = 'Model selection disabled for Best Track';
+        }
+    
+        checkbox.addEventListener('change', function() {
+            if (this.checked && !isBdeckTrackLoaded) {
+                selectedCategory = this.value;
+            
+                // Filter storms by both init time and category
+                const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
+                let filteredStorms = storms;
+            
+                // First filter by init time if selected
+                if (selectedInitTime) {
+                    filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
                 }
-            });
-        
-            label.appendChild(checkbox);
-            label.appendChild(document.createTextNode(category.name));
-            modelCategorySelector.appendChild(label);
+            
+                // Then filter by model category if not "all"
+                if (selectedCategory !== 'all') {
+                    const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
+                    filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
+                }
+            
+                // Display the filtered tracks
+                displayAdeckTracks(filteredStorms, selectedStormId);
+            
+                // Show notification
+                showNotification(`Displaying ${category.name} model tracks`, 'info', 1500);
+            }
         });
     
-   
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(category.name));
+        modelCategorySelector.appendChild(label);
+    });
     
-    //modelCategorySelector.appendChild(categoryDropdown);
-    dialog.appendChild(modelCategorySelector);
+    // Add CSS for disabled elements
+    const style = document.createElement('style');
+    style.textContent = `
+        .disabled-for-bdeck {
+            opacity: 0.5;
+            pointer-events: none;
+            filter: grayscale(100%);
+            cursor: not-allowed !important;
+        }
+        .disabled-for-bdeck * {
+            cursor: not-allowed !important;
+        }
+        .bdeck-indicator {
+            background-color: rgba(0, 66, 204, 0.2);
+            color: white;
+            padding: 5px 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            text-align: center;
+            display: inline-block;
+        }
+        .bdeck-badge {
+            background-color: #0066cc;
+            color: white;
+            font-weight: bold;
+            font-size: 11px;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .disabled-message {
+            margin-top: 4px;
+        }
+    `;
+    dialog.appendChild(style);
     
     // Create content container
     const content = document.createElement('div');
@@ -4456,8 +4516,156 @@ function showStormSelectionDialog(storms) {
     } else {
         // Create date sections
         dates.forEach(date => {
-            // Create date section code here...
-            // ...existing code...
+            // Create date section
+            const dateSection = document.createElement('div');
+            dateSection.className = 'date-section';
+            
+            // Format date for display
+            const formattedDate = new Date(date).toLocaleDateString('en-US', {
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+            
+            // Create date header
+            const dateHeader = document.createElement('div');
+            dateHeader.className = 'date-header';
+            dateHeader.innerHTML = `<h4>${formattedDate}</h4>`;
+            dateSection.appendChild(dateHeader);
+            
+            // Get basins for this date
+            const basins = groupedStorms[date];
+            const basinIds = Object.keys(basins);
+            
+            // Create accordion for basins
+            basinIds.forEach(basinId => {
+                const basinSection = document.createElement('div');
+                basinSection.className = 'basin-section';
+                
+                // Create basin header with toggle
+                const basinHeader = document.createElement('div');
+                basinHeader.className = 'basin-header';
+                
+                // Get basin name
+                const basinName = getBasinName(basinId);
+                
+                // Count total models in this basin
+                const modelCount = Object.keys(basins[basinId]).length;
+                
+                basinHeader.innerHTML = `
+                    <div class="basin-title">
+                        <span class="basin-name">${basinName}</span>
+                        <span class="basin-count">${modelCount} model${modelCount !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="basin-toggle">
+                        <i class="toggle-icon">▼</i>
+                    </div>
+                `;
+                
+                // Add click handler for toggle
+                basinHeader.addEventListener('click', function() {
+                    // Toggle the basin content visibility
+                    const content = this.nextElementSibling;
+                    const isExpanded = content.style.display !== 'none';
+                    
+                    content.style.display = isExpanded ? 'none' : 'block';
+                    
+                    // Update the toggle icon
+                    const toggleIcon = this.querySelector('.toggle-icon');
+                    if (toggleIcon) {
+                        toggleIcon.textContent = isExpanded ? '▼' : '▲';
+                    }
+                });
+                
+                basinSection.appendChild(basinHeader);
+                
+                // Create basin content
+                const basinContent = document.createElement('div');
+                basinContent.className = 'basin-content';
+                
+                // Get models for this basin
+                const models = basins[basinId];
+                const modelIds = Object.keys(models).sort();
+                
+                // Create model list
+                modelIds.forEach(modelId => {
+                    // Get tracks for this model
+                    const tracks = models[modelId];
+                    
+                    // Create model section
+                    const modelSection = document.createElement('div');
+                    modelSection.className = 'model-section';
+                    
+                    // Get model color 
+                    const modelColor = window.AdeckReader.getModelColor(modelId);
+                    
+                    // Create model header with color indicator
+                    const modelHeader = document.createElement('div');
+                    modelHeader.className = 'model-row';
+                    modelHeader.dataset.model = modelId;
+                    
+                    // Create color indicator
+                    const colorIndicator = document.createElement('span');
+                    colorIndicator.className = 'color-indicator';
+                    colorIndicator.style.backgroundColor = modelColor || '#999';
+                    
+                    modelHeader.appendChild(colorIndicator);
+                    
+                    // Add model name and count
+                    modelHeader.innerHTML += `
+                        <span class="model-name">${modelId}</span>
+                        <span class="model-count">${tracks.length} track${tracks.length !== 1 ? 's' : ''}</span>
+                    `;
+                    
+                    // Add click handler to select this model's tracks
+                    modelHeader.addEventListener('click', function() {
+                        // First filter by date and init time
+                        const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
+                        
+                        let filteredTracks = storms.filter(storm => 
+                            storm.model === modelId && 
+                            (!selectedInitTime || storm.initTime === selectedInitTime)
+                        );
+                        
+                        // Select this model's tracks
+                        console.log(`Selecting ${filteredTracks.length} tracks for model ${modelId}`);
+                        
+                        // Remove any existing selection
+                        document.querySelectorAll('.model-row.selected').forEach(row => {
+                            row.classList.remove('selected');
+                        });
+                        
+                        // Mark this model as selected
+                        this.classList.add('selected');
+                        
+                        // Display the tracks
+                        displayAdeckTracks(filteredTracks, null, false);
+                        
+                        // Update the model description in the dialog
+                        updateModelDescriptionInDialog(modelId);
+                        
+                        // Select the first track in the list
+                        if (filteredTracks.length > 0) {
+                            selectAdeckTrack(filteredTracks[0].id);
+                        }
+                        
+                        // Show notification
+                        showNotification(`Displaying ${modelId} forecast tracks`, 'info', 1500);
+                    });
+                    
+                    modelSection.appendChild(modelHeader);
+                    basinContent.appendChild(modelSection);
+                });
+                
+                // Default to showing the content
+                basinContent.style.display = 'block';
+                
+                basinSection.appendChild(basinContent);
+                dateSection.appendChild(basinSection);
+            });
+            
+            stormList.appendChild(dateSection);
         });
     }
     
@@ -4570,6 +4778,7 @@ function showStormSelectionDialog(storms) {
     // Display all tracks for the latest init time by default
     window.AdeckReader.displayTracksByInitTime(storms);
 }
+
 
 // Enhanced draggable function specifically for A-deck dialogs
 function makeEnhancedDraggable(element) {
@@ -6733,77 +6942,6 @@ function updateLoadingCount(count) {
     }
 }
 
-// Load ADECK file
-async function loadAdeckFile(file) {
-    try {
-        // Show loading indicator
-        document.getElementById('loading-indicator').classList.remove('hidden');
-        
-        console.log("Loading A/B-DECK file:", file.name);
-        
-        // Read file content
-        const content = await readFileContent(file);
-        
-        console.log("File content loaded, parsing...");
-        
-        // Check if content is valid
-        if (!content || typeof content !== 'string' || content.trim() === '') {
-            throw new Error("File appears to be empty or invalid");
-        }
-        
-        // Simplified check for B-deck file - only look for BEST in the model column
-        // B-deck files will have "BEST" as the model (5th column)
-        const isBdeck = content.includes(',BEST,') || content.includes(', BEST,');
-        
-        // Parse ADECK/BDECK content with robust error handling
-        let result;
-        try {
-            if (isBdeck) {
-                result = window.AdeckReader.parseBdeckFile(content);
-            } else {
-                result = window.AdeckReader.parseAdeckFile(content);
-            }
-            console.log("Parse result:", result);
-        } catch (parseError) {
-            console.error("Error in parsing file:", parseError);
-            throw new Error(`Failed to parse A/B-DECK file: ${parseError.message}`);
-        }
-        
-        // Ensure result is an object with a storms array
-        if (!result) {
-            console.error("Parser returned", result);
-            result = { storms: [], count: 0 };
-        } else if (!result.storms) {
-            console.error("Parser did not return a valid storms array:", result);
-            // Create a valid result object with an empty storms array
-            result.storms = [];
-            result.count = 0;
-        }
-        
-        if (result.storms.length === 0) {
-            throw new Error("No valid storms found in the A/B-DECK file.");
-        }
-        
-        console.log(`Found ${result.storms.length} storms in A/B-DECK file`);
-        
-        // Store storms data in the global window object
-        window.adeckStorms = result.storms;
-        
-        // Show storm selection dialog
-        showStormSelectionDialog(window.adeckStorms);
-
-        // Show success message with appropriate file type
-        const fileType = result.isBdeck ? 'B-DECK' : 'A-DECK';
-        showNotification(`Found ${result.storms.length} storm track${result.storms.length > 1 ? 's' : ''} in ${fileType} file`, 'success', 2000);
-        
-    } catch (error) {
-        console.error("Error loading A/B-DECK file:", error);
-        showNotification(`Error: ${error.message}`, 'error');
-    } finally {
-        // Hide loading indicator
-        document.getElementById('loading-indicator').classList.add('hidden');
-    }
-}
 
 // Read file content as text
 function readFileContent(file) {
@@ -6889,31 +7027,6 @@ function calculatePointTimeFromTau(initTimeString, tau) {
     }
 }
 
-// Format time display for ADECK points with improved clarity
-//function formatPointTime(pointTime, includeDate = true) {
-//     console.log("Formatting point time:", pointTime);
-//     if (!pointTime) return "Unknown";
-    
-//     try {
-//         const options = {
-//             hour: '2-digit',
-//             minute: '2-digit',
-//             timeZone: 'UTC',
-//             hour12: false
-//         };
-        
-//         if (includeDate) {
-//             options.year = 'numeric';
-//             options.month = 'short';
-//             options.day = 'numeric';
-//         }
-        
-//         return new Intl.DateTimeFormat('en-US', options).format(pointTime) + " UTC";
-//     } catch(e) {
-//         console.error("Error formatting time:", e);
-//         return "Unknown";
-//     }
-// }
 
 // Format time display for ADECK points with improved clarity
 function formatPointTime(pointTime, includeDate = true) {
@@ -6991,426 +7104,6 @@ function formatPressure(pressureHPa, defaultText = "Not Specified") {
         return defaultText;
     }
     return pressureHPa + ' hPa';
-}
-
-// Show storm selection dialog - updated to include init time selector
-function showStormSelectionDialog(storms) {
-    // Close any existing dialog
-    if (adeckStormSelectionDialog) {
-        adeckStormSelectionDialog.remove();
-    }
-    
-    // Group storms by date, basin, and model for better organization
-    const groupedStorms = window.AdeckReader.groupStormsByDateAndModel(storms);
-    
-    // Create dialog container
-    const dialog = document.createElement('div');
-    dialog.id = 'adeck-storm-selection';
-    dialog.className = 'storm-selection-dialog';
-    
-    // Get the first storm to extract cyclone information for the header
-    const firstStorm = storms.length > 0 ? storms[0] : null;
-    const cycloneName = firstStorm && firstStorm.cycloneName ? 
-                        firstStorm.cycloneName : 
-                        'Select a Forecast Track';
-    
-    // Create dialog header with cyclone name and controls
-    const header = document.createElement('div');
-    header.className = 'dialog-header';
-    header.style.cursor = 'move';    
-    
-    // Add header title and controls with better positioning
-    header.innerHTML = `
-    <h3>${cycloneName}</h3>
-    <div class="dialog-controls">
-        <div class="track-toggle-container">
-            <button id="toggle-all-tracks" class="toggle-tracks-btn" title="Toggle all tracks visibility">Show All</button>
-        </div>
-        <div class="window-controls">
-            <button class="minimize-btn" title="Minimize dialog">_</button>
-            <button class="close-btn" title="Close dialog">&times;</button>
-        </div>
-    </div>
-    `;
-    dialog.appendChild(header);
-
-
-
-
-    // Add the "Fix View" button
-    const fixViewButton = document.createElement('button');
-    fixViewButton.textContent = 'Fix View';
-    fixViewButton.className = 'fix-view-button';
-
-    // Add click event listener to toggle the fix view state
-    fixViewButton.addEventListener('click', function () {
-        window.isViewFixed = !window.isViewFixed;
-
-        if (window.isViewFixed) {
-            // Store the current map bounds
-            window.fixedBounds = map.getBounds();
-            console.log('Fixing view to bounds:', window.fixedBounds);
-        } else {
-            // Clear the fixed bounds
-            window.fixedBounds = null;
-            console.log('Unfixing view.');
-        }
-
-        // Update button text based on the state
-        fixViewButton.textContent = window.isViewFixed ? 'Unfix View' : 'Fix View';
-
-        // Show notification
-        showNotification(
-            window.isViewFixed ? 'Map view is now fixed' : 'Map view is now unfixed',
-            'info',
-            1500
-        );
-    });
-
-    // Append the Fix View button to the dialog
-    dialog.appendChild(fixViewButton);
-
-
-
-
-
-    
-    // Show cyclone ID if available
-    if (firstStorm && firstStorm.cycloneId) {
-        const cycloneIdElement = document.createElement('div');
-        cycloneIdElement.className = 'cyclone-id';
-        cycloneIdElement.textContent = firstStorm.cycloneId;
-        header.insertBefore(cycloneIdElement, header.querySelector('.dialog-controls'));
-    }
-    
-    // Add model description container right after the header
-    const modelDescContainer = document.createElement('div');
-    modelDescContainer.className = 'model-description-container';
-    modelDescContainer.innerHTML = '<div class="model-description">Select a model track to see its description</div>';
-    dialog.appendChild(modelDescContainer);
-    
-    // Add currently selected model info display
-    const selectedModelInfo = document.createElement('div');
-    selectedModelInfo.className = 'selected-model-info hidden';
-    selectedModelInfo.innerHTML = '<span class="selected-model-label">No model selected</span>';
-    dialog.appendChild(selectedModelInfo);
-    
-    // Add Init Time Selector
-    const initTimeSelector = window.AdeckReader.createInitTimeSelector(storms, (selectedInitTime) => {
-        // When an init time is selected, update the tracks display below
-        window.AdeckReader.displayTracksByInitTime(storms, selectedInitTime);
-    });
-    
-    dialog.appendChild(initTimeSelector);
-    
-    // Add Model Category selector
-    const modelCategorySelector = document.createElement('div');
-    modelCategorySelector.className = 'model-category-filter';
-    
-    // Define the model categories - same as in AdeckReader for consistency
-    const modelCategories = [
-        { id: 'all', name: 'All Models' },
-        { 
-            id: 'track_intensity', 
-            name: 'Track & Intensity Models', 
-            models: [
-                'OFCL', 'OFCI', 'CARQ',
-                'AVNO', 'AVNI', 'GFS',
-                'GFDI', 'GFDL', 'GFDT', 'GFDN',
-                'UKMI', 'UKM', 'UKX', 'UKXI', 'UKX2', 'UKM2',
-                'CMC', 'HWRF', 'HMON',
-                'EMXI', 'EMX', 'EMX2', 'ECMWF',
-                'NGPS', 'NGPI', 'NGP2',
-                'DSHP', 'SHIP', 'LGEM', 'SHFR', 'SHNS', 'DRCL'
-            ]
-        },
-        {
-            id: 'track_only',
-            name: 'Track-Only Models',
-            models: [
-                'TVCN', 'TVCE', 'TVCX',
-                'CONU', 'GUNA', 'GUNS', 'HCCA',
-                'BAMD', 'BAMM', 'BAMS', 'LBAR', 'XTRP',
-                'CLIP', 'CLP5', 'DRCL', 'MRCL'
-            ]
-        }
-    ];
-    
-    // Create label for the dropdown
-    const categoryLabel = document.createElement('div');
-    categoryLabel.className = 'model-category-label';
-    categoryLabel.textContent = 'Model Type:';
-    modelCategorySelector.appendChild(categoryLabel);
-    
-    // Create dropdown
-    const categoryDropdown = document.createElement('select');
-    categoryDropdown.className = 'model-category-dropdown';
-    
-    // Function to update category dropdown with track counts for current init time
-    const updateCategoryDropdownCounts = (selectedInitTime) => {
-        // Filter storms to only include those with the selected init time
-        const currentInitStorms = selectedInitTime 
-            ? storms.filter(storm => storm.initTime === selectedInitTime)
-            : storms;
-        
-        // Count tracks for each category in the filtered set
-        const categoryCounts = {};
-        categoryCounts['all'] = currentInitStorms.length;
-        
-        // Count tracks in each category
-        modelCategories.slice(1).forEach(category => {
-            const categoryModels = category.models || [];
-            const count = currentInitStorms.filter(storm => categoryModels.includes(storm.model)).length;
-            categoryCounts[category.id] = count;
-        });
-        
-        // Update dropdown options with current counts
-        while (categoryDropdown.firstChild) {
-            categoryDropdown.removeChild(categoryDropdown.firstChild);
-        }
-        
-        // Get the list of models that are actually in the data
-        const availableModels = [...new Set(currentInitStorms.map(storm => storm.model))];
-        
-        // Add options to the dropdown with track counts - only for categories with available models
-        modelCategories.forEach(category => {
-            // For non-"all" categories, check if any models are available
-            if (category.id === 'all' || 
-                (category.models && category.models.some(model => availableModels.includes(model)))) {
-                
-                const option = document.createElement('option');
-                option.value = category.id;
-                const count = categoryCounts[category.id];
-                option.textContent = `${category.name} (${count} tracks)`;
-                categoryDropdown.appendChild(option);
-            }
-        });
-    };
-    
-    // Initialize dropdown with counts for the default init time (latest)
-    const defaultInitTime = document.querySelector('.init-time-dropdown')?.value;
-    updateCategoryDropdownCounts(defaultInitTime);
-    
-    // Add listener to init time dropdown to update category counts when changed
-    const initTimeDropdown = dialog.querySelector('.init-time-dropdown');
-    if (initTimeDropdown) {
-        initTimeDropdown.addEventListener('change', function() {
-            updateCategoryDropdownCounts(this.value);
-        });
-    }
-    
-    // Add change handler for dropdown
-    //categoryDropdown.addEventListener('change', function() {
-        //const selectedCategory = this.value;
-       // const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
-       // 
-       // // Filter storms by both init time and category
-       // let filteredStorms = storms;
-       // 
-       // // First filter by init time if selected
-       // if (selectedInitTime) {
-       //     filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
-       // }
-       // 
-       // // Then filter by model category if not "all"
-       // if (selectedCategory !== 'all') {
-       //     const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
-       //     filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
-       // }
-       // 
-       // // Display the filtered tracks
-       // displayAdeckTracks(filteredStorms, selectedStormId);
-       // 
-       // // Show notification
-       // showNotification(`Displaying ${selectedCategory} model tracks`, 'info', 1500);
-    //});
-        const categories = [
-            { id: 'track_intensity', name: 'Track & Intensity Models' },
-            { id: 'track_only', name: 'Track-Only Models' },
-            { id: 'all', name: 'All Models' }
-        ];
-        
-        let selectedCategory = 'all'; // Default category
-        
-        categories.forEach(category => {
-            const label = document.createElement('label');
-            label.className = 'category-checkbox-label';
-        
-            const checkbox = document.createElement('input');
-            checkbox.type = 'radio';
-            checkbox.name = 'model-category';
-            checkbox.value = category.id;
-            checkbox.checked = category.id === selectedCategory;
-            checkbox.className = 'category-checkbox';
-        
-            checkbox.addEventListener('change', function() {
-                if (this.checked) {
-                    selectedCategory = this.value;
-                
-                    // Filter storms by both init time and category
-                    const selectedInitTime = document.querySelector('.init-time-dropdown')?.value;
-                    let filteredStorms = storms;
-                
-                    // First filter by init time if selected
-                    if (selectedInitTime) {
-                        filteredStorms = storms.filter(storm => storm.initTime === selectedInitTime);
-                    }
-                
-                    // Then filter by model category if not "all"
-                    if (selectedCategory !== 'all') {
-                        const categoryModels = modelCategories.find(cat => cat.id === selectedCategory)?.models || [];
-                        filteredStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
-                    }
-                
-                    // Display the filtered tracks
-                    displayAdeckTracks(filteredStorms, selectedStormId);
-                
-                    // Show notification
-                    showNotification(`Displaying ${category.name} model tracks`, 'info', 1500);
-                }
-            });
-        
-            label.appendChild(checkbox);
-            label.appendChild(document.createTextNode(category.name));
-            modelCategorySelector.appendChild(label);
-        });
-    
-   
-    
-    //modelCategorySelector.appendChild(categoryDropdown);
-    dialog.appendChild(modelCategorySelector);
-    
-    // Create content container
-    const content = document.createElement('div');
-    content.className = 'dialog-content';
-    dialog.appendChild(content);
-    
-    // Create storm list
-    const stormList = document.createElement('div');
-    stormList.className = 'storm-list';
-    content.appendChild(stormList);
-    
-    // Get dates and sort in descending order (newest first)
-    const dates = Object.keys(groupedStorms).sort((a, b) => b.localeCompare(a));
-    
-    if (dates.length === 0) {
-        stormList.innerHTML = '<div class="empty-state">No valid forecast tracks found. Please check the file format.</div>';
-    } else {
-        // Create date sections
-        dates.forEach(date => {
-            // Create date section code here...
-            // ...existing code...
-        });
-    }
-    
-    // Add dialog to document
-    document.body.appendChild(dialog);
-    
-    // Position the dialog in the middle-left of the screen
-    const mapContainer = document.getElementById('map-container');
-    const mapRect = mapContainer.getBoundingClientRect();
-    
-    dialog.style.position = 'absolute';
-    dialog.style.top = '50%';
-    dialog.style.left = mapRect.left + 20 + 'px'; // Position on left with margin
-    dialog.style.transform = 'translateY(-50%)'; // Center vertically only
-    dialog.style.maxHeight = '80vh'; // Limit height
-    dialog.style.maxWidth = '35%'; // Limit width
-    dialog.style.minWidth = '300px'; // Ensure minimum width
-    
-    // Set a high z-index to ensure visibility in fullscreen mode
-    dialog.style.zIndex = document.fullscreenElement ? '10000' : '1000';
-    
-    // Store reference to dialog
-    adeckStormSelectionDialog = dialog;
-    
-    // Make dialog draggable with enhanced draggability
-    makeEnhancedDraggable(dialog);
-    
-    // Add event listeners for minimize and close buttons
-    dialog.querySelector('.minimize-btn').addEventListener('click', () => {
-        toggleDialogMinimize(dialog);
-        // Don't trigger any zoom changes when minimizing
-    });
-    
-    dialog.querySelector('.close-btn').addEventListener('click', () => {
-        dialog.remove();
-        adeckStormSelectionDialog = null;
-        
-        // Set the flag to indicate dialog was previously shown but is now closed
-        adeckDialogWasShown = true;
-        // Don't trigger any zoom changes when closing
-    });
-    
-    // Add toggle all tracks button functionality
-    const toggleAllTracksBtn = dialog.querySelector('#toggle-all-tracks');
-    if (toggleAllTracksBtn) {
-        // Create a flag to track track visibility state - initially all tracks are shown
-        let allTracksVisible = true;
-        
-        toggleAllTracksBtn.addEventListener('click', function() {
-            // Toggle the state
-            allTracksVisible = !allTracksVisible;
-            
-            // Update button text
-            this.textContent = allTracksVisible ? 'Hide All' : 'Show All';
-            this.title = allTracksVisible ? 'Hide all tracks' : 'Show all tracks';
-            
-            // Toggle visibility of all track layers
-            if (window.adeckLines && window.adeckLines.length > 0) {
-                window.adeckLines.forEach(line => {
-                    if (line) {
-                        if (allTracksVisible) {
-                            line.addTo(window.adeckLayerGroup);
-                        } else {
-                            window.adeckLayerGroup.removeLayer(line);
-                        }
-                    }
-                });
-            }
-            
-            // Toggle visibility of all track markers
-            if (window.adeckMarkers && window.adeckMarkers.length > 0) {
-                window.adeckMarkers.forEach(marker => {
-                    if (marker) {
-                        if (allTracksVisible) {
-                            marker.addTo(window.adeckLayerGroup);
-                        } else {
-                            window.adeckLayerGroup.removeLayer(marker);
-                        }
-                    }
-                });
-            }
-            
-            // If a track is selected, keep it visible regardless
-            if (selectedStormId !== null) {
-                // Ensure the selected track remains visible
-                window.adeckLines.forEach((line, index) => {
-                    if (line && line.stormId === selectedStormId) {
-                        line.addTo(window.adeckLayerGroup);
-                    }
-                });
-                
-                window.adeckMarkers.forEach((marker, index) => {
-                    if (marker && marker.stormId === selectedStormId) {
-                        marker.addTo(window.adeckLayerGroup);
-                    }
-                });
-            }
-        });
-        
-        // Initialize button text (initially all tracks are shown)
-        toggleAllTracksBtn.textContent = 'Hide All';
-        toggleAllTracksBtn.title = 'Hide all tracks';
-    }
-    
-    // Add visual highlight to dialog header on hover
-    header.addEventListener('mouseenter', () => {
-        header.style.backgroundColor = '';
-    });
-    
-    // Display all tracks for the latest init time by default
-    window.AdeckReader.displayTracksByInitTime(storms);
 }
 
 // Enhanced draggable function specifically for A-deck dialogs

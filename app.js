@@ -2815,6 +2815,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Ensure map fills available space
     adjustMapSize();
+
+    // Add kyboard shortcut for Clear selection 
+    document.addEventListener('keydown', function(e) { 
+        if (e.key === 'Escape' || e.key === 'c') {
+            deselectAll();
+        }
+    })
     
     // Set initial mode status text based on editMode value
     const modeStatus = document.getElementById('mode-status');

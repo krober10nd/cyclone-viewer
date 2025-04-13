@@ -681,10 +681,12 @@ function initializeMap() {
     map.on('zoomend', function() {
         updateAdeckSymbology();
         updateDateLabels();
+        console.log('Zoom changed, updating date labels');
     });
     
     map.on('moveend', function() {
         updateDateLabels();
+        console.log("Map moved, updating date labels");
     });
 
     // Wait for map to be ready before adding legend
@@ -5654,7 +5656,15 @@ function parseBdeckData(bdeckData) {
     const lines = bdeckData.split('\n').filter(line => line.trim());
     const points = lines.map(line => {
         const fields = line.split(',').map(field => field.trim());
-        return {
+
+        // Extract date/time from B-deck format (fields 0-3 have year, month, day, hour)
+        const year = parseInt(fields[0], 10);
+        const month = parseInt(fields[1], 10);
+        const day = parseInt(fields[2], 10);
+        const hour = parseInt(fields[3], 10);
+        console.log(`Parsed date: ${year}-${month}-${day} ${hour}:00`);
+
+       return {
             latitude: parseFloat(fields[6]) / 10, // Convert to decimal degrees
             longitude: -parseFloat(fields[7]) / 10, // Convert to decimal degrees
             windSpeed: parseInt(fields[8], 10),
@@ -5662,7 +5672,13 @@ function parseBdeckData(bdeckData) {
             r34_ne: parseInt(fields[13], 10) || NaN,
             r34_se: parseInt(fields[14], 10) || NaN,
             r34_sw: parseInt(fields[15], 10) || NaN,
-            r34_nw: parseInt(fields[16], 10) || NaN
+            r34_nw: parseInt(fields[16], 10) || NaN,
+            // Add datetimefields in format expected by updateDatetimeLables 
+            year_utc: year,
+            month_utc: month,
+            day_utc: day,
+            hour_utc: hour,
+            minute_utc: 0
         };
     });
 
@@ -8488,6 +8504,9 @@ function displayBdeckTrack(storm) {
             })
         });
 
+        // Store point index for reference 
+        marker.pointIndex = index;
+
         // Add click event to display storm attributes
         marker.on('click', () => {
             clearAllStormVisualizations();
@@ -8511,6 +8530,10 @@ function displayBdeckTrack(storm) {
     // Fit the map to the track bounds
     const bounds = L.latLngBounds(storm.points.map(point => [point.latitude, point.longitude]));
     map.fitBounds(bounds);
+
+    // Call updateDateLabels 
+    console.log("Updating date labels in b-deck track");
+    updateDateLabels();
 }
 
 function loadBdeckTrack(bdeckData) {
@@ -8557,82 +8580,213 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
 const labelMinZoom = 8; // Show labels at zoom level 8 and above
 const labelMaxZoom = 14; // Hide labels at zoom level 14 and above
 
-// Update date labels based on zoom level and proximity
+// Update date labels based on zoom level and viewport visibility
 function updateDateLabels() {
-    // Only proceed if we have data points
-    if (!data || data.length === 0) return;
-    
     const zoom = map.getZoom();
-    const mapCenter = map.getCenter();
-    const threshold = 500; // Distance threshold in km
+    const bounds = map.getBounds();
     
-    // Check if map zoom is sufficient (zoom level 8 or higher)
+    // Check if map zoom is within the desired range
     const showLabels = zoom >= labelMinZoom && zoom < labelMaxZoom;
-
-    const bounds = map.getBounds(); 
     
-    // Update each marker's label
-    markers.forEach((marker, index) => {
-        const point = data[index];
-        const markerPosition = marker.getLatLng();
-        
-        // Calculate distance from map center to marker
-        const distance = calculateHaversineDistance(
-            mapCenter.lat, mapCenter.lng,
-            markerPosition.lat, markerPosition.lng
-        );
-        
-        // Get formatted date and time
-        let dateTimeLabel = "";
-        if (point.year_utc && point.month_utc && point.day_utc) {
-            const date = new Date(Date.UTC(
-                point.year_utc,
-                point.month_utc - 1, // JavaScript months are 0-indexed
-                point.day_utc,
-                point.hour_utc || 0,
-                point.minute_utc || 0
-            ));
+    // First handle regular CSV tracks
+    if (data && data.length > 0 && markers && markers.length > 0) {
+        // Process markers from CSV tracks (existing code)
+        markers.forEach((marker, index) => {
+            if (index >= data.length) return; // Safety check
             
-            dateTimeLabel = date.toLocaleString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'UTC',
-                hour12: false
-            }) + " UTC";
-        } else if (point.tau !== undefined && point.initTime) {
-            // For ADECK points, calculate from init time and tau
-            const pointTime = calculatePointTimeFromTau(point.initTime, point.tau);
-            if (pointTime) {
-                dateTimeLabel = formatPointTime(pointTime);
+            const point = data[index];
+            const markerPosition = marker.getLatLng();
+            
+            // Skip processing if marker is outside current viewport
+            if (!bounds.contains(markerPosition)) {
+                if (marker.getTooltip()) marker.closeTooltip();
+                return;
             }
-        }
-        
-        // Skip if we don't have a valid date
-        if (!dateTimeLabel) return;
-        
-        // Show label if zoomed in enough and within distance threshold
-        if (showLabels && distance <= threshold) {
-            // Create or update tooltip
-            if (!marker.getTooltip()) {
-                marker.bindTooltip(dateTimeLabel, {
-                    permanent: true,
-                    direction: 'top',
-                    className: 'date-time-label',
-                    offset: [0, -10]
-                });
+            
+            // Get formatted date and time - keep existing code for CSV tracks
+            let dateTimeLabel = "";
+            if (point.year_utc && point.month_utc && point.day_utc) {
+                const date = new Date(Date.UTC(
+                    point.year_utc,
+                    point.month_utc - 1, 
+                    point.day_utc,
+                    point.hour_utc || 0,
+                    point.minute_utc || 0
+                ));
+                
+                dateTimeLabel = date.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'UTC',
+                    hour12: false
+                }) + " UTC";
             }
-            marker.openTooltip();
-        } else {
-            // Hide tooltip when zoomed out or too far away
-            if (marker.getTooltip()) {
-                marker.closeTooltip();
+            
+            // Show/hide label based on zoom level
+            handleLabelVisibility(marker, dateTimeLabel, showLabels);
+        });
+    }
+    
+    // Then handle A/B-deck tracks
+    if (window.adeckMarkers && window.adeckMarkers.length > 0) {
+        window.adeckMarkers.forEach(marker => {
+            if (!marker) return;
+            
+            const markerPosition = marker.getLatLng();
+            
+            // Skip processing if marker is outside current viewport
+            if (!bounds.contains(markerPosition)) {
+                if (marker.getTooltip()) marker.closeTooltip();
+                return;
             }
-        }
-    });
+            
+            let dateTimeLabel = "";
+            // For A-deck tracks, get time from pointTime or calculate it from initTime and tau
+            if (marker.pointTime) {
+                dateTimeLabel = formatPointTime(marker.pointTime);
+            } else if (marker.stormId && window.adeckStorms) {
+                // Try to find the correct storm and point
+                const storm = window.adeckStorms.find(s => s.id === marker.stormId);
+                if (storm && storm.points && marker.pointIndex !== undefined) {
+                    const point = storm.points[marker.pointIndex];
+                    if (point && point.initTime && point.tau !== undefined) {
+                        const pointTime = calculatePointTimeFromTau(point.initTime, point.tau);
+                        if (pointTime) {
+                            dateTimeLabel = formatPointTime(pointTime);
+                        }
+                    }
+                }
+            }
+            
+            // Show/hide label based on zoom level
+            handleLabelVisibility(marker, dateTimeLabel, showLabels);
+        });
+    }
 }
+// Helper function to handle label visibility with model-specific colors
+function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
+    if (!dateTimeLabel) return;
+    
+    if (showLabels) {
+        // Determine the appropriate color based on marker model
+        let backgroundColor = 'rgba(0, 0, 0, 0.7)'; // Default color
+        let textColor = 'white';
+        
+        // For ADECK markers, get model color
+        if (marker.model) {
+            console.log(`Marker model: ${marker.model}`);
+            // Get model color from AdeckReader if available
+            let modelColor = null;
+            if (window.AdeckReader && typeof window.AdeckReader.getModelColor === 'function') {
+                modelColor = window.AdeckReader.getModelColor(marker.model);
+            } else if (window.modelColors && window.modelColors[marker.model]) {
+                modelColor = window.modelColors[marker.model];
+            }
+            
+            if (modelColor) {
+                console.log(`Model color: ${modelColor}`);
+                // Convert hex color to rgba with opacity for better readability
+                if (modelColor.startsWith('#')) {
+                    backgroundColor = hexToRgba(modelColor, 0.85);
+                    
+                    // Determine if text should be black or white based on background brightness
+                    textColor = getContrastingTextColor(modelColor);
+                } else {
+                    backgroundColor = modelColor;
+                }
+            }
+        } else if (marker.pointIndex !== undefined && window.currentModelName) {
+            // For CSV tracks with current model name
+            if (window.modelColors && window.modelColors[window.currentModelName]) {
+                const modelColor = window.modelColors[window.currentModelName];
+                backgroundColor = hexToRgba(modelColor, 0.85);
+                textColor = getContrastingTextColor(modelColor);
+            }
+        }
+        
+        // Create a unique class for this model's labels
+        const className = marker.model ? 
+            `date-time-label model-${marker.model.toLowerCase().replace(/\s+/g, '-')}` : 
+            'date-time-label';
+        
+        // Create or update tooltip with inline style for color
+        if (!marker.getTooltip()) {
+            const tooltipOptions = {
+                permanent: true,
+                direction: 'top',
+                className: className,
+                offset: [0, -10]
+            };
+            
+            marker.bindTooltip(dateTimeLabel, tooltipOptions);
+            
+            // Apply colors directly to the tooltip element after it's created
+            marker.on('tooltipopen', function(e) {
+                const tooltipElement = e.tooltip._container;
+                if (tooltipElement) {
+                    tooltipElement.style.backgroundColor = backgroundColor;
+                    tooltipElement.style.color = textColor;
+                    tooltipElement.style.border = '1px solid rgba(255,255,255,0.3)';
+                    
+                    // Also color the tooltip arrow
+                    const arrow = tooltipElement.querySelector('.leaflet-tooltip-tip');
+                    if (arrow) {
+                        arrow.style.backgroundColor = backgroundColor;
+                    }
+                }
+            });
+        }
+        marker.openTooltip();
+    } else {
+        // Hide tooltip when zoomed out
+        if (marker.getTooltip()) {
+            marker.closeTooltip();
+        }
+    }
+}
+
+// Helper function to convert hex to rgba
+function hexToRgba(hex, alpha = 1) {
+    // Remove # if present
+    hex = hex.replace('#', '');
+    
+    // Convert 3-digit hex to 6-digit
+    if (hex.length === 3) {
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    
+    // Extract RGB values
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    
+    // Return rgba color
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Helper function to determine text color (black or white) based on background
+function getContrastingTextColor(hexColor) {
+    // Remove # if present
+    hexColor = hexColor.replace('#', '');
+    
+    // Convert 3-digit hex to 6-digit
+    if (hexColor.length === 3) {
+        hexColor = hexColor[0] + hexColor[0] + hexColor[1] + hexColor[1] + hexColor[2] + hexColor[2];
+    }
+    
+    // Calculate brightness (simple formula: (R*299 + G*587 + B*114) / 1000)
+    const r = parseInt(hexColor.substring(0, 2), 16);
+    const g = parseInt(hexColor.substring(2, 4), 16);
+    const b = parseInt(hexColor.substring(4, 6), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    
+    // Return white text for dark backgrounds, black text for light backgrounds
+    return brightness > 125 ? 'black' : 'white';
+}
+
 
 // Add CSS for date labels to make them more visible
 document.addEventListener('DOMContentLoaded', function() {
@@ -8642,22 +8796,22 @@ document.addEventListener('DOMContentLoaded', function() {
         style.id = 'date-label-styles';
         style.textContent = `
             .date-time-label {
-                background-color: rgba(0, 0, 0, 0.7);
+                background-color: rgba(0, 0, 0, 0.5);
                 border: none;
                 border-radius: 3px;
                 color: white;
-                font-size: 11px;
-                padding: 3px 6px;
-                font-weight: bold;
+                font-size: 9px;
+                padding: 2px 4px;
+                font-weight: normal;
                 white-space: nowrap;
                 pointer-events: none;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+                box-shadow: 0 1px 2px rgba(0,0,0,0.3);
             }
             .date-time-label:before {
-                border-top-color: rgba(0, 0, 0, 0.7);
+                border-top-color: rgba(0, 0, 0, 0.5);
             }
             .leaflet-tooltip-top.date-time-label::before {
-                border-top-color: rgba(0, 0, 0, 0.7);
+                border-top-color: rgba(0, 0, 0, 0.5);
             }
         `;
         document.head.appendChild(style);

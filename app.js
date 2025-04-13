@@ -686,7 +686,7 @@ function initializeMap() {
     
     map.on('moveend', function() {
         updateDateLabels();
-        console.log("Map moved, updating date labels");
+        console.log("Map moved, updating date labels2");
     });
 
     // Wait for map to be ready before adding legend
@@ -4113,30 +4113,6 @@ function calculatePointTimeFromTau(initTimeString, tau) {
     }
 }
 
-// Format time display for ADECK points with improved clarity
-function formatPointTime(pointTime, includeDate = true) {
-    if (!pointTime) return "Unknown";
-    
-    try {
-        const options = {
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'UTC',
-            hour12: false
-        };
-        
-        if (includeDate) {
-            options.year = 'numeric';
-            options.month = 'short';
-            options.day = 'numeric';
-        }
-        
-        return new Intl.DateTimeFormat('en-US', options).format(pointTime) + " UTC";
-    } catch(e) {
-        console.error("Error formatting time:", e);
-        return "Unknown";
-    }
-}
 
 // Helper function to check if a parameter is specified (not null, undefined, or zero)
 function isSpecified(value) {
@@ -5599,61 +5575,6 @@ function createDeselectAllButton() {
     document.head.appendChild(style);
 }
 
-function displayBdeckTrack(storm) {
-    // Clear existing markers and visualizations
-    markers.forEach(marker => map.removeLayer(marker));
-    markers = [];
-    clearAllStormVisualizations();
-
-    data = storm.points;
-
-    // Iterate through each point in the storm track
-    storm.points.forEach((point, index) => {
-        // Add a marker for each point
-        const marker = L.marker([point.latitude, point.longitude], {
-            title: `Point ${index}`,
-            icon: L.divIcon({
-                className: 'bdeck-marker',
-                html: `<div style="background-color: #0066cc; width: 10px; height: 10px; border-radius: 50%;"></div>`,
-                iconSize: [10, 10],
-                iconAnchor: [5, 5]
-            })
-        });
-
-        // Store point index for reference 
-        markker.pointIndex = index; 
-
-        // Add B-deckm odel info 
-        marker.model = 'BEST';
-
-        // Add click event to display storm attributes
-        marker.on('click', () => {
-            clearAllStormVisualizations();
-            displayStormAttributes(index);
-        });
-
-        marker.addTo(map);
-        markers.push(marker);
-    });
-
-    // Draw a polyline for the track
-    const trackLine = L.polyline(
-        storm.points.map(point => [point.latitude, point.longitude]),
-        {
-            color: '#0066cc',
-            weight: 2,
-            opacity: 0.8
-        }
-    ).addTo(map);
-
-    // Fit the map to the track bounds
-    const bounds = L.latLngBounds(storm.points.map(point => [point.latitude, point.longitude]));
-    map.fitBounds(bounds);
-
-    // update date labels 
-    updateDateLabels();
-}
-
 // Document ready event handling
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize map
@@ -6969,10 +6890,51 @@ function calculatePointTimeFromTau(initTimeString, tau) {
 }
 
 // Format time display for ADECK points with improved clarity
+//function formatPointTime(pointTime, includeDate = true) {
+//     console.log("Formatting point time:", pointTime);
+//     if (!pointTime) return "Unknown";
+    
+//     try {
+//         const options = {
+//             hour: '2-digit',
+//             minute: '2-digit',
+//             timeZone: 'UTC',
+//             hour12: false
+//         };
+        
+//         if (includeDate) {
+//             options.year = 'numeric';
+//             options.month = 'short';
+//             options.day = 'numeric';
+//         }
+        
+//         return new Intl.DateTimeFormat('en-US', options).format(pointTime) + " UTC";
+//     } catch(e) {
+//         console.error("Error formatting time:", e);
+//         return "Unknown";
+//     }
+// }
+
+// Format time display for ADECK points with improved clarity
 function formatPointTime(pointTime, includeDate = true) {
+    console.log("Formatting point time:", pointTime);
     if (!pointTime) return "Unknown";
     
     try {
+        // Convert to Date object if it's a string
+        let dateObj;
+        if (typeof pointTime === 'string') {
+            dateObj = new Date(pointTime);
+        } else {
+            dateObj = pointTime;
+        }
+        
+        // Check if date is valid
+        if (isNaN(dateObj.getTime())) {
+            console.error("Invalid date:", pointTime);
+            return "Unknown";
+        }
+        
         const options = {
             hour: '2-digit',
             minute: '2-digit',
@@ -6986,12 +6948,13 @@ function formatPointTime(pointTime, includeDate = true) {
             options.day = 'numeric';
         }
         
-        return new Intl.DateTimeFormat('en-US', options).format(pointTime) + " UTC";
+        return new Intl.DateTimeFormat('en-US', options).format(dateObj) + " UTC";
     } catch(e) {
         console.error("Error formatting time:", e);
         return "Unknown";
     }
 }
+
 
 // Helper function to check if a parameter is specified (not null, undefined, or zero)
 function isSpecified(value) {
@@ -8474,6 +8437,7 @@ const labelMaxZoom = 14; // Hide labels at zoom level 14 and above
 
 // Update date labels based on zoom level and viewport visibility
 function updateDateLabels() {
+    console.log('Inside updateDateLabels function');
     const zoom = map.getZoom();
     const bounds = map.getBounds();
     
@@ -8481,9 +8445,6 @@ function updateDateLabels() {
     const showLabels = zoom >= labelMinZoom && zoom < labelMaxZoom;
     
     // First handle regular CSV tracks
-    console.log("Updating date labels for CSV tracks");
-    // print the data 
-    console.log("Data: ", data);
     if (data && data.length > 0 && markers && markers.length > 0) {
         // Process markers from CSV tracks (existing code)
         markers.forEach((marker, index) => {
@@ -8527,31 +8488,51 @@ function updateDateLabels() {
     
     // Then handle A/B-deck tracks
     if (window.adeckMarkers && window.adeckMarkers.length > 0) {
+        console.log("Updating date labels for A-deck tracks");
+        console.log(window.adeckMarkers);
         window.adeckMarkers.forEach(marker => {
             if (!marker) return;
             
             const markerPosition = marker.getLatLng();
+            console.log("Marker position: ", markerPosition);
+
+            // get the latest bounds from the map 
+            const bounds = map.getBounds();
+            console.log("Map bounds: ", bounds);
             
             // Skip processing if marker is outside current viewport
-            if (!bounds.contains(markerPosition)) {
-                if (marker.getTooltip()) marker.closeTooltip();
-                return;
-            }
+            //if (!bounds.contains(markerPosition)) {
+            //    if (marker.getTooltip()) marker.closeTooltip();
+            //    console.log("Marker outside bounds, closing tooltip");
+            //    return;
+            //}
             
             let dateTimeLabel = "";
             // For A-deck tracks, get time from pointTime or calculate it from initTime and tau
+            console.log("Marker point time: ", marker.pointTime);
             if (marker.pointTime) {
                 dateTimeLabel = formatPointTime(marker.pointTime);
             } else if (marker.stormId && window.adeckStorms) {
+                console.log("Finding storm by ID: ", marker.stormId);
                 // Try to find the correct storm and point
                 const storm = window.adeckStorms.find(s => s.id === marker.stormId);
                 if (storm && storm.points && marker.pointIndex !== undefined) {
+                    console.log("Found storm3: ", storm);
                     const point = storm.points[marker.pointIndex];
+
+                    dateTimeLabel = formatPointTime(point.initTime);
+
                     if (point && point.initTime && point.tau !== undefined) {
+
                         const pointTime = calculatePointTimeFromTau(point.initTime, point.tau);
+
                         if (pointTime) {
                             dateTimeLabel = formatPointTime(pointTime);
                         }
+                    else {
+                        console.log("No point time available, using init time");
+                        dateTimeLabel = formatPointTime(point.initTime);
+                    }
                     }
                 }
             }

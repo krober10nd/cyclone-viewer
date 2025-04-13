@@ -1268,11 +1268,14 @@ window.AdeckReader = {
         
         // Create coordinate array for polyline
         const trackCoords = track.points.map(point => [point.latitude, point.longitude]);
+
+        const points = storm.points.map(point=> [point.latitude, point.longitude]);
+
         
         // Create and add the track polyline
         const trackLine = L.polyline(trackCoords, {
             color: trackColor,
-            weight: options.trackWeight || 2,
+            weight: isSelected ? 4 : 2,
             opacity: isHidden ? 0 : (options.trackOpacity || 0.8),
             stroke: !isHidden,
             stormId: track.id,
@@ -1400,138 +1403,138 @@ window.AdeckReader = {
 
 // Parse B-deck file - integrate with our custom parseBDeck function
 function parseBdeckFile(content) {
-  try {
-    const lines = content.split('\n');
-    const storms = [];
-    let currentStorm = null;
-    
-    // Process each line
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue
+    try {
+      const lines = content.split('\n');
+      const storms = [];
+      let currentStorm = null;
       
-      // Split by comma and trim each field
-      const fields = line.split(',').map(f => f.trim());
-      
-      // Ensure we have enough fields
-      if (fields.length < 20) continue;
-      
-      // Extract basic fields
-      const basin = fields[0];
-      const cycloneNumber = fields[1];
-      const dateTime = fields[2];
-      const recordType = fields[4]; // Should be "BEST" for B-deck
-      
-      // Skip if not a BEST track record
-      if (recordType !== "BEST") continue;
-      
-      // Extract position
-      let latitude = parseFloat(fields[6].replace('N', '').replace('S', '')) / 10.0;
-      if (fields[6].includes('S')) latitude = -latitude;
-      
-      let longitude = parseFloat(fields[7].replace('W', '').replace('E', '')) / 10.0;
-      if (fields[7].includes('W')) longitude = -longitude;
-      
-      // Extract intensity info
-      const windSpeed = parseInt(fields[8]);
-      const pressure = parseInt(fields[9]);
-      const stormType = fields[10];
-      
-      // Check if there's R34 data
-      const hasR34 = fields[11] === "34";
-      
-      // Extract R34 wind radii (in nautical miles)
-      // Replace 0 values with NaN as requested
-      let r34_ne = NaN, r34_se = NaN, r34_sw = NaN, r34_nw = NaN;
-      
-      if (hasR34) {
-        // NE quadrant is field 13
-        const neValue = parseInt(fields[13]) || 0;
-        r34_ne = neValue > 0 ? neValue * 1852 : NaN; // Convert NM to meters, use NaN if 0
+      // Process each line
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue
         
-        // SE quadrant is field 14
-        const seValue = parseInt(fields[14]) || 0;
-        r34_se = seValue > 0 ? seValue * 1852 : NaN;
+        // Split by comma and trim each field
+        const fields = line.split(',').map(f => f.trim());
         
-        // SW quadrant is field 15
-        const swValue = parseInt(fields[15]) || 0;
-        r34_sw = swValue > 0 ? swValue * 1852 : NaN;
+        // Ensure we have enough fields
+        if (fields.length < 20) continue;
         
-        // NW quadrant is field 16
-        const nwValue = parseInt(fields[16]) || 0;
-        r34_nw = neValue > 0 ? nwValue * 1852 : NaN;
+        // Extract basic fields
+        const basin = fields[0];
+        const cycloneNumber = fields[1];
+        const dateTime = fields[2];
+        const recordType = fields[4]; // Should be "BEST" for B-deck
+        
+        // Skip if not a BEST track record
+        if (recordType !== "BEST") continue;
+        
+        // Extract position
+        let latitude = parseFloat(fields[6].replace('N', '').replace('S', '')) / 10.0;
+        if (fields[6].includes('S')) latitude = -latitude;
+        
+        let longitude = parseFloat(fields[7].replace('W', '').replace('E', '')) / 10.0;
+        if (fields[7].includes('W')) longitude = -longitude;
+        
+        // Extract intensity info
+        const windSpeed = parseInt(fields[8]);
+        const pressure = parseInt(fields[9]);
+        const stormType = fields[10];
+        
+        // Check if there's R34 data
+        const hasR34 = fields[11] === "34";
+        
+        // Extract R34 wind radii (in nautical miles)
+        // Replace 0 values with NaN as requested
+        let r34_ne = NaN, r34_se = NaN, r34_sw = NaN, r34_nw = NaN;
+        
+        if (hasR34) {
+          // NE quadrant is field 13
+          const neValue = parseInt(fields[13]) || 0;
+          r34_ne = neValue > 0 ? neValue * 1852 : NaN; // Convert NM to meters, use NaN if 0
+          
+          // SE quadrant is field 14
+          const seValue = parseInt(fields[14]) || 0;
+          r34_se = seValue > 0 ? seValue * 1852 : NaN;
+          
+          // SW quadrant is field 15
+          const swValue = parseInt(fields[15]) || 0;
+          r34_sw = swValue > 0 ? swValue * 1852 : NaN; // FIXED: was using seValue
+          
+          // NW quadrant is field 16
+          const nwValue = parseInt(fields[16]) || 0;
+          r34_nw = nwValue > 0 ? nwValue * 1852 : NaN; // FIXED: was using neValue
+        }
+        
+        // Extract storm name from field 27 if available
+        let stormName = "";
+        if (fields.length >= 28) {
+          stormName = fields[27];
+        }
+        
+        // Parse date and time
+        const year = parseInt(dateTime.substring(0, 4));
+        const month = parseInt(dateTime.substring(4, 6)) - 1; // JavaScript months are 0-indexed
+        const day = parseInt(dateTime.substring(6, 8));
+        const hour = parseInt(dateTime.substring(8, 10));
+        
+        // Create proper ISO datetime string for pointTime
+        const initTime = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:00:00Z`;
+        
+        // Create point object with all extracted data including R34 wind radii
+        const point = {
+          latitude,
+          longitude,
+          wind_speed: windSpeed * 0.514444, // Convert knots to m/s
+          mslp: pressure,
+          stormType,
+          // Use long-form names for compatibility with visualization code
+          radius_of_34_kt_winds_ne_m: r34_ne,
+          radius_of_34_kt_winds_se_m: r34_se, 
+          radius_of_34_kt_winds_sw_m: r34_sw,
+          radius_of_34_kt_winds_nw_m: r34_nw,
+          year_utc: year,
+          month_utc: month + 1, // Store as 1-indexed for display
+          day_utc: day,
+          hour_utc: hour,
+          minute_utc: 0,
+          initTime, // Store original datetime in ISO format
+          isBestTrack: true,
+          model: "BEST",
+          pointTime: new Date(Date.UTC(year, month, day, hour, 0, 0)) // Add actual Date object for label formatting
+        };
+        
+        // Generate cyclone ID and check if it's a new storm
+        const cycloneId = `${basin}${cycloneNumber}${year}`;
+        
+        if (!currentStorm || currentStorm.id !== cycloneId) {
+          // Start a new storm
+          currentStorm = {
+            id: cycloneId,
+            cycloneId: cycloneId,
+            cycloneName: stormName,
+            basin: basin,
+            initTime: dateTime, // YYYYMMDDHH format needed for formatDateTime
+            model: "BEST",     // Explicitly set model to BEST
+            points: [point]
+          };
+          storms.push(currentStorm);
+        } else {
+          // Add point to existing storm
+          currentStorm.points.push(point);
+          
+          // Update storm name if it was empty before
+          if (!currentStorm.cycloneName && stormName) {
+            currentStorm.cycloneName = stormName;
+          }
+        }
       }
-      
-      // Extract storm name from field 27 if available
-      let stormName = "";
-      if (fields.length >= 28) {
-        stormName = fields[27];
-      }
-      
-      // Parse date and time
-      const year = parseInt(dateTime.substring(0, 4));
-      const month = parseInt(dateTime.substring(4, 6)) - 1; // JavaScript months are 0-indexed
-      const day = parseInt(dateTime.substring(6, 8));
-      const hour = parseInt(dateTime.substring(8, 10));
-      
-      // using this information parse an init time 
-      const initTime = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:00:00Z`;
-      console.log("Parsed init time:", initTime);
-      // Create point object with all extracted data including R34 wind radii
-      const point = {
-        latitude,
-        longitude,
-        wind_speed: windSpeed * 0.514444, // Convert knots to m/s
-        mslp: pressure,
-        stormType,
-        // Use long-form names for compatibility with visualization code
-        radius_of_34_kt_winds_ne_m: r34_ne,
-        radius_of_34_kt_winds_se_m: r34_se, 
-        radius_of_34_kt_winds_sw_m: r34_sw,
-        radius_of_34_kt_winds_nw_m: r34_nw,
-        year_utc: year,
-        month_utc: month + 1, // Store as 1-indexed
-        day_utc: day,
-        hour_utc: hour,
-        minute_utc: 0,
-        initTime,
-        isBestTrack: true,
-        model: "BEST"
-      };
-      
-            // Generate cyclone ID and check if it's a new storm
-            const cycloneId = `${basin}${cycloneNumber}${year}`;
-      
-            if (!currentStorm || currentStorm.id !== cycloneId) {
-              // Start a new storm
-              currentStorm = {
-                id: cycloneId,
-                cycloneId: cycloneId,
-                cycloneName: stormName,
-                basin: basin,
-                // Add these two properties:
-                initTime: dateTime, // YYYYMMDDHH format needed for formatDateTime
-                model: "BEST",     // Explicitly set model to BEST
-                points: [point]
-              };
-              storms.push(currentStorm);
-            } else {
-              // Add point to existing storm
-              currentStorm.points.push(point);
-              
-              // Update storm name if it was empty before
-              if (!currentStorm.cycloneName && stormName) {
-                currentStorm.cycloneName = stormName;
-              }
-            }
+  
+      return { storms, isBdeck: true, count: storms.length };
+    } catch (error) {
+      console.error("Error parsing B-deck file:", error);
+      return { storms: [], isBdeck: true, count: 0 };
     }
-    
-    return { storms, isBdeck: true, count: storms.length };
-  } catch (error) {
-    console.error("Error parsing B-deck file:", error);
-    return { storms: [], isBdeck: true, count: 0 };
   }
-}
 
 // Export the function
 window.AdeckReader = window.AdeckReader || {};

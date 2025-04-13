@@ -34,6 +34,9 @@ let currentModelName = null; // Track the currently displayed model name
 // Add a global variable to track if the A-deck dialog was previously shown
 let adeckDialogWasShown = false;
 
+const labelMinZoom = 8; // Show labels at zoom level 8 and above
+const labelMaxZoom = 14; // Hide labels at zoom level 14 and above
+
 
 // Make the centralized MODEL_COLORS available globally for consistent usage
 window.MODEL_COLORS = MODEL_COLORS;
@@ -594,7 +597,8 @@ const UNIT_CONVERSIONS = {
     NM_TO_MILES: 1.15078,    // nautical miles to miles
     M_TO_KM: 0.001,          // meters to kilometers
     KM_TO_M: 1000,           // kilometers to meters
-    NM_TO_M: 1852            // nautical miles to meters
+    NM_TO_M: 1852,            // nautical miles to meters
+    M_TO_NM: 0.000539957 // meters to nautical miles
 };
 
 // NM to km conversion factor (for visualization)
@@ -1219,8 +1223,15 @@ function calculateWedgePoints(lat, lon, radius, startAngle, endAngle, steps = 32
 }
 
 // Display storm attributes visualization - Fix meter to km conversion
-function displayStormAttributes(pointIndex) {
-    const point = data[pointIndex];
+function displayStormAttributes(pointIndex, my_point=null) {
+    if (my_point) {
+        // Use the provided point if available
+        point = my_point;
+        console.log("Using provided point:", point);
+    } else {
+        // Use the point from the data array
+        const point = data[pointIndex];
+    }
     
     // Clear existing visualizations
     clearStormVisualizations(pointIndex);
@@ -1289,12 +1300,14 @@ function displayStormAttributes(pointIndex) {
     ];
     
     wedges.forEach(wedge => {
-        const radius = point[wedge.attr];
+        let radius = point[wedge.attr];
+        console.log(`Wedge ${wedge.attr} radius:`, radius);
         // Skip if radius is undefined or NaN
         if (radius === undefined || isNaN(radius)) return;
         
         // Convert meters to NM for the wedge calculation
-        const radiusNM = radius / UNIT_CONVERSIONS.NM_TO_M;
+        //const radiusNM = radius / UNIT_CONVERSIONS.NM_TO_M;
+        const radiusNM = radius / UNIT_CONVERSIONS.NM_TO_M; // Convert meters to nautical miles
         
         const wedgePoints = calculateWedgePoints(
             point.latitude, 
@@ -4254,17 +4267,6 @@ function showStormSelectionDialog(storms) {
     `;
     dialog.appendChild(header);
     
-    // Add B-deck indicator if in B-deck mode
-    console.log("isBdeckTrackLoaded:", isBdeckTrackLoaded); 
-    //if (isBdeckTrackLoaded) {
-        //console.log("B-deck track loaded, adding indicator");
-        //const bdeckIndicator = document.createElement('div');
-        //bdeckIndicator.className = 'bdeck-indicator';
-        //bdeckIndicator.innerHTML = '<span class="bdeck-badge">BEST</span>';
-        //bdeckIndicator.title = 'Currently displaying a Best Track (B-deck). Init time and model selection disabled.';
-        //header.insertBefore(bdeckIndicator, header.querySelector('.dialog-controls'));
-    //}
-    
     // Add the "Fix View" button
     const fixViewButton = document.createElement('button');
     fixViewButton.textContent = 'Fix View';
@@ -5029,6 +5031,9 @@ function removeAdeckTracks() {
 // Function to update A-deck track symbology based on zoom level
 function updateAdeckSymbology() {
     const zoomLevel = map.getZoom();
+    const bounds = map.getBounds(); // Get current map bounds for pan detection
+
+    console.log('Updating A-deck symbology at zoom level:', zoomLevel);
     
     // Update markers
     if (window.adeckMarkers && window.adeckMarkers.length > 0) {
@@ -5038,6 +5043,16 @@ function updateAdeckSymbology() {
             
             // Get the storm ID either directly from marker or from options
             const stormId = marker.stormId || (marker.options && marker.options.stormId);
+            
+            // Show storm structure at higher zoom levels for B-deck tracks
+            if (isBdeckTrackLoaded && zoomLevel <= 7) {
+                console.log('Displaying storm structures for B-deck points');
+                displayBdeckStructuresForVisiblePoints(bounds);
+            } else if (zoomLevel >= 7) {
+                // Clear storm structures when zooming out
+                clearAllStormVisualizations();
+            }
+
             
             // Check if this marker belongs to a hidden track
             const shouldBeHidden = stormId && 
@@ -5203,6 +5218,78 @@ function updateAdeckSymbology() {
         });
     }
 }
+
+// Function to display storm structures for visible B-deck points
+function displayBdeckStructuresForVisiblePoints(bounds) {
+    // Only proceed if we have B-deck tracks loaded
+    if (!isBdeckTrackLoaded || !window.adeckMarkers) return;
+    console.log('Displaying B-deck structures for visible points');
+
+    // Clear existing visualizations first to prevent duplicates
+    clearAllStormVisualizations();
+    
+    // Track points that we've shown structures for to avoid duplicates
+    const processedPoints = new Set();
+    
+    // Find B-deck markers within the current viewport
+    window.adeckMarkers.forEach(marker => {
+        if (!marker) return;
+        
+        // Check if marker is in view
+        const markerPosition = marker.getLatLng();
+        if (!bounds.contains(markerPosition)) return;
+        console.log('Marker in bounds:', markerPosition);
+        
+        // Find the corresponding storm and point
+        const stormId = marker.stormId;
+        const pointIndex = marker.pointIndex;
+        
+        // Skip if we've already processed this point
+        const pointKey = `${stormId}-${pointIndex}`;
+        if (processedPoints.has(pointKey)) return;
+        console.log('Processing point:', pointKey);
+        processedPoints.add(pointKey);
+        
+        // Find the storm data
+        const storm = window.adeckStorms.find(s => s.id === stormId);
+        if (!storm || !storm.points || !storm.points[pointIndex]) return;
+        
+        const point = storm.points[pointIndex];
+
+        
+        // Create a structured point object for visualization
+        const structuredPoint = {
+            latitude: point.latitude,
+            longitude: point.longitude,
+            rmw: point.rmw,
+            r34_ne: point.radius_of_34_kt_winds_ne_m,
+            r34_se: point.radius_of_34_kt_winds_se_m,
+            r34_sw: point.radius_of_34_kt_winds_sw_m,
+            r34_nw: point.radius_of_34_kt_winds_nw_m,
+            roci: point.roci,
+        };
+        
+        // Only display structures if the point has any structure data
+        // print out storm scale info 
+        console.log(point)
+        // Create container for this point's visualizations if it doesn't exist
+        if (!stormCircles[pointIndex]) {
+            stormCircles[pointIndex] = [];
+        }
+        // Use existing displayStormAttributes function to show the visualization
+        displayStormAttributes(pointIndex, my_point = structuredPoint);
+    });
+}
+
+// Update map event handlers to call updateAdeckSymbology on moveend too
+map.on('moveend', function() {
+    // Call updateAdeckSymbology when panning to update structures based on new viewport
+    if (isBdeckTrackLoaded) {
+        updateAdeckSymbology();
+    }
+    updateDateLabels();
+});
+
 // Select a specific A-deck track and highlight it
 function selectAdeckTrack(stormId) {
     // Store the selected storm ID
@@ -7795,8 +7882,6 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-const labelMinZoom = 8; // Show labels at zoom level 8 and above
-const labelMaxZoom = 14; // Hide labels at zoom level 14 and above
 
 // Update date labels based on zoom level and viewport visibility
 function updateDateLabels() {
@@ -7850,8 +7935,6 @@ function updateDateLabels() {
     
     // Then handle A/B-deck tracks
     if (window.adeckMarkers && window.adeckMarkers.length > 0) {
-        console.log("Updating date labels for A-deck tracks");
-        console.log(window.adeckMarkers);
         window.adeckMarkers.forEach(marker => {
             if (!marker) return;
             
@@ -7860,14 +7943,6 @@ function updateDateLabels() {
 
             // get the latest bounds from the map 
             const bounds = map.getBounds();
-            //console.log("Map bounds: ", bounds);
-            
-            // Skip processing if marker is outside current viewport
-            //if (!bounds.contains(markerPosition)) {
-            //    if (marker.getTooltip()) marker.closeTooltip();
-            //    console.log("Marker outside bounds, closing tooltip");
-            //    return;
-            //}
             
             let dateTimeLabel = "";
             // For A-deck tracks, get time from pointTime or calculate it from initTime and tau
@@ -7879,7 +7954,6 @@ function updateDateLabels() {
                 // Try to find the correct storm and point
                 const storm = window.adeckStorms.find(s => s.id === marker.stormId);
                 if (storm && storm.points && marker.pointIndex !== undefined) {
-                    //console.log("Found storm3: ", storm);
                     const point = storm.points[marker.pointIndex];
 
                     dateTimeLabel = formatPointTime(point.initTime);

@@ -172,13 +172,13 @@ function showIsochrones(pointIndex) {
             color: isochroneColors[index],
             weight: 1.5 + (hours * 0.3), // Thicker lines for later hours, more gradual progression
             dashArray: '5, 5',
-            opacity: 0.9,
+            opacity: 0.6,
             smoothFactor: 2,
             className: 'isochrone-line'
         }).addTo(map);
         
-        // Add a label showing the hour - positioned at a point just above the midpoint
-        const midPointIndex = Math.floor(isochronePoints.length / 2);
+        // Add a label showing the hour - positioned offset from the midpoint
+        const midPointIndex = Math.floor(isochronePoints.length / 3);
         const midPoint = isochronePoints[midPointIndex];
         
         // Calculate a position for the label that's slightly offset from the line
@@ -680,12 +680,16 @@ function initializeMap() {
     // Add zoom event handler to update A-deck symbology
     map.on('zoomend', function() {
         updateAdeckSymbology();
+        updateDateLabels();
     });
     
     // Wait for map to be ready before adding legend
     map.whenReady(function() {
         // Add hurricane category legend after map is ready
         setTimeout(addCategoryLegend, 100);
+         
+        // Add initial date labels if zoom level is sufficient 
+        setTimeout(updateDateLabels, 200);
     });
 }
 
@@ -1918,6 +1922,7 @@ function createFloatingDialog(pointIndex) {
         dialogContainer.style.top = '20px';
     } else {
         // Normal mode, position relative to map on the left side
+        console.log("Updating date labels");
         dialogContainer.style.position = 'absolute';
         dialogContainer.style.left = (mapRect.left + 20) + 'px'; // Position on left
         dialogContainer.style.top = (mapRect.top + 20) + 'px';
@@ -2159,6 +2164,7 @@ function displayMarkers(fitBounds = true, modelName = null) {
         trackLine = null;
     }
     
+    // TODO: move this to a centralized location
     // Model-specific colors (add more as needed)
     const modelColors = {
         'AVNO': '#FF6B6B',  // GFS - red
@@ -2194,6 +2200,10 @@ function displayMarkers(fitBounds = true, modelName = null) {
             dashArray: modelName === 'OFCL' || modelName === 'CARQ' || modelName === 'BEST' ? '' : '5, 5'
         }).addTo(map);
     }
+
+    // Update date labels after creating the trackline 
+    console.log("Updating date labels");
+    updateDateLabels();
     
     // Add new markers
     data.forEach((point, index) => {
@@ -2208,7 +2218,7 @@ function displayMarkers(fitBounds = true, modelName = null) {
         const icon = L.divIcon({
             className: `hurricane-marker category-${category.name.toLowerCase().replace(/\s+/g, '-')} ${index === 0 ? 'first-point' : ''}`,
             iconSize: [iconSize, iconSize],
-            html: `<div style="background-color: ${markerColor}; width: 100%; height: 100%; border-radius: 50%; 
+            html: `<div style="background-color: ${markerColor}; width: 120%; height: 120%; border-radius: 50%; 
                   ${index === 0 ? 'border: 2px solid #FFFFFF;' : ''}" 
                   class="${index === 0 ? 'first-point-marker' : ''}"></div>`,
             iconAnchor: [iconSize/2, iconSize/2] // Ensure centered anchor point
@@ -2353,6 +2363,7 @@ function displayMarkers(fitBounds = true, modelName = null) {
     });
 
     // Update date labels after creating markers
+    console.log("Updating date labels");
     updateDateLabels();
 
     // Only fit bounds if explicitly requested
@@ -5664,6 +5675,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Make sure we have explicit event handlers for map zoom and movement
     map.on('zoomend', function() {
         console.log('Map zoom changed to', map.getZoom());
+        updateAdeckSymbology();
         updateDateLabels();
     });
     
@@ -8531,6 +8543,9 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
+const labelMinZoom = 8; // Show labels at zoom level 8 and above
+const labelMaxZoom = 14; // Hide labels at zoom level 14 and above
+
 // Update date labels based on zoom level and proximity
 function updateDateLabels() {
     //console.log("Updating date labels for A-deck markers");
@@ -8542,7 +8557,7 @@ function updateDateLabels() {
     const threshold = 500; // Distance threshold in km
     
     // Check if map zoom is sufficient (zoom level 8 or higher)
-    const showLabels = zoom >= 8;
+    const showLabels = zoom >= labelMinZoom && zoom < labelMaxZoom;
     
     // Update each marker's label
     markers.forEach((marker, index) => {

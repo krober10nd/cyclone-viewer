@@ -1455,11 +1455,11 @@ function parseBdeckFile(content) {
         
         // SW quadrant is field 15
         const swValue = parseInt(fields[15]) || 0;
-        r34_sw = swValue > 0 ? seValue * 1852 : NaN;
+        r34_sw = swValue > 0 ? swValue * 1852 : NaN;
         
         // NW quadrant is field 16
         const nwValue = parseInt(fields[16]) || 0;
-        r34_nw = neValue > 0 ? neValue * 1852 : NaN;
+        r34_nw = neValue > 0 ? nwValue * 1852 : NaN;
       }
       
       // Extract storm name from field 27 if available
@@ -1484,10 +1484,11 @@ function parseBdeckFile(content) {
         wind_speed: windSpeed * 0.514444, // Convert knots to m/s
         mslp: pressure,
         stormType,
-        r34_ne,
-        r34_se,
-        r34_sw,
-        r34_nw,
+        // Use long-form names for compatibility with visualization code
+        radius_of_34_kt_winds_ne_m: r34_ne,
+        radius_of_34_kt_winds_se_m: r34_se, 
+        radius_of_34_kt_winds_sw_m: r34_sw,
+        radius_of_34_kt_winds_nw_m: r34_nw,
         year_utc: year,
         month_utc: month + 1, // Store as 1-indexed
         day_utc: day,
@@ -1566,4 +1567,4 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 });
 
-console.log("ADECK Reader initialized");
+console.log("ADECK/BDECK Reader initialized");

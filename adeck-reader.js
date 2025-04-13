@@ -1486,6 +1486,105 @@ function parseBdeckFile(content) {
 window.AdeckReader = window.AdeckReader || {};
 window.AdeckReader.parseBdeckFile = parseBdeckFile;
 
+// Add keyboard navigation for track points
+document.addEventListener('keydown', function(event) {
+    // Only handle arrow keys if a point is selected
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        // Prevent scrolling the page
+        event.preventDefault();
+        
+        // Case 1: Navigate through A-deck track points
+        if (selectedStormId !== null && window.adeckStorms) {
+            // Find the currently selected storm
+            const selectedStorm = window.adeckStorms.find(storm => storm.id === selectedStormId);
+            
+            if (selectedStorm && selectedStorm.points && selectedStorm.points.length > 0) {
+                // Find currently selected point if any
+                let currentPointIndex = -1;
+                
+                // Check if any marker is open with a popup
+                if (window.adeckMarkers) {
+                    for (let i = 0; i < window.adeckMarkers.length; i++) {
+                        const marker = window.adeckMarkers[i];
+                        if (marker && marker.stormId === selectedStormId && marker._popup && marker._popup.isOpen()) {
+                            currentPointIndex = marker.pointIndex;
+                            break;
+                        }
+                    }
+                }
+                
+                // If no point is currently selected, default to first point for down, last point for up
+                if (currentPointIndex === -1) {
+                    currentPointIndex = event.key === 'ArrowDown' ? -1 : selectedStorm.points.length;
+                }
+                
+                // Calculate next index
+                let nextIndex;
+                if (event.key === 'ArrowDown') {
+                    nextIndex = Math.min(currentPointIndex + 1, selectedStorm.points.length - 1);
+                } else {
+                    nextIndex = Math.max(currentPointIndex - 1, 0);
+                }
+                
+                // Only proceed if we're actually changing points
+                if (nextIndex !== currentPointIndex) {
+                    console.log(`Navigating A-deck from point ${currentPointIndex} to ${nextIndex}`);
+                    
+                    // Find the marker for this point
+                    const targetMarker = window.adeckMarkers.find(
+                        marker => marker && marker.stormId === selectedStormId && marker.pointIndex === nextIndex
+                    );
+                    
+                    // Trigger click on this marker if found
+                    if (targetMarker) {
+                        // Close any open popups
+                        map.closePopup();
+                        
+                        // Trigger marker click
+                        targetMarker.fire('click');
+                        
+                        // Center map on this marker
+                        map.panTo(targetMarker.getLatLng(), {
+                            animate: true,
+                            duration: 0.5
+                        });
+                    }
+                }
+            }
+        }
+        // Case 2: Navigate through CSV track points
+        else if (selectedPoint !== null && data && data.length > 0) {
+            // Calculate next index
+            let nextIndex;
+            if (event.key === 'ArrowDown') {
+                nextIndex = Math.min(selectedPoint + 1, data.length - 1);
+            } else {
+                nextIndex = Math.max(selectedPoint - 1, 0);
+            }
+            
+            // Only proceed if we're actually changing points
+            if (nextIndex !== selectedPoint) {
+                console.log(`Navigating CSV track from point ${selectedPoint} to ${nextIndex}`);
+                
+                // Select the next point
+                selectPoint(nextIndex);
+                
+                // Center map on this marker
+                if (markers && markers[nextIndex]) {
+                    map.panTo(markers[nextIndex].getLatLng(), {
+                        animate: true,
+                        duration: 0.5
+                    });
+                    
+                    // Open popup if there is one
+                    markers[nextIndex].openPopup();
+                }
+            }
+        }
+    }
+});
+
+
 // Initialize when DOM is fully loaded
 document.addEventListener('DOMContentLoaded', function() {
     // Add function to window object for global access

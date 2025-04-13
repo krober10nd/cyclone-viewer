@@ -4223,7 +4223,7 @@ function showStormSelectionDialog(storms) {
         console.log("B-deck track loaded, adding indicator");
         const bdeckIndicator = document.createElement('div');
         bdeckIndicator.className = 'bdeck-indicator';
-        bdeckIndicator.innerHTML = '<span class="bdeck-badge">BEST TRACK LOADED</span>';
+        bdeckIndicator.innerHTML = '<span class="bdeck-badge">BEST</span>';
         bdeckIndicator.title = 'Currently displaying a Best Track (B-deck). Init time and model selection disabled.';
         header.insertBefore(bdeckIndicator, header.querySelector('.dialog-controls'));
     }

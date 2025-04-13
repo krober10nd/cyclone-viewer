@@ -683,6 +683,10 @@ function initializeMap() {
         updateDateLabels();
     });
     
+    map.on('moveend', function() {
+        updateDateLabels();
+    });
+
     // Wait for map to be ready before adding legend
     map.whenReady(function() {
         // Add hurricane category legend after map is ready
@@ -8548,7 +8552,6 @@ const labelMaxZoom = 14; // Hide labels at zoom level 14 and above
 
 // Update date labels based on zoom level and proximity
 function updateDateLabels() {
-    //console.log("Updating date labels for A-deck markers");
     // Only proceed if we have data points
     if (!data || data.length === 0) return;
     
@@ -8558,6 +8561,8 @@ function updateDateLabels() {
     
     // Check if map zoom is sufficient (zoom level 8 or higher)
     const showLabels = zoom >= labelMinZoom && zoom < labelMaxZoom;
+
+    const bounds = map.getBounds(); 
     
     // Update each marker's label
     markers.forEach((marker, index) => {

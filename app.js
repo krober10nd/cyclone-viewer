@@ -1833,7 +1833,7 @@ function createFloatingDialog(pointIndex) {
         const newCategory = getHurricaneCategory(value);
         categoryBadge.textContent = newCategory.name;
         categoryBadge.style.backgroundColor = newCategory.color;
-        displayMarkers();
+        displayMarkers(false);
     };
     
     // Update the pressure slider handler to disconnect the auto-relationship when manually adjusted
@@ -2543,9 +2543,7 @@ function toggleEditMode() {
     if (editMode && selectedPoint !== null && isochronesEnabled) {
         showIsochrones(selectedPoint);
     }
-    
-    // Reload markers with new draggable status but preserve current view
-    displayMarkers(false); // Pass false to prevent fitting bounds
+    displayMarkers(fitBounds=false); // Pass false to prevent fitting bounds
 }
 
 // Populate point selector

@@ -1224,21 +1224,22 @@ function calculateWedgePoints(lat, lon, radius, startAngle, endAngle, steps = 32
 
 // Display storm attributes visualization - Fix meter to km conversion
 function displayStormAttributes(pointIndex, my_point=null) {
-    if (my_point) {
+    // check if my point is null
+    if (my_point != null) {
         // Use the provided point if available
         point = my_point;
-        console.log("Using provided point:", point);
     } else {
         // Use the point from the data array
-        const point = data[pointIndex];
+        point = data[pointIndex];
     }
+
     
     // Clear existing visualizations
     clearStormVisualizations(pointIndex);
     
     // Create container for this point's visualizations
     stormCircles[pointIndex] = [];
-    
+
     // Calculate conversion ratio based on latitude
     const center = [point.latitude, point.longitude];
     
@@ -7882,9 +7883,6 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-
-// Update date labels based on zoom level and viewport visibility
-// Update the updateDateLabels function to handle conditional label display
 function updateDateLabels() {
     const zoom = map.getZoom();
     const bounds = map.getBounds();
@@ -7933,96 +7931,144 @@ function updateDateLabels() {
         });
     }
     
-    // For A-deck tracks, only show labels if a point is clicked
+    // For A-deck tracks (including B-deck)
     if (window.adeckMarkers && window.adeckMarkers.length > 0) {
-        // Find if any A-deck marker has an open popup (which means it was clicked)
-        let selectedMarker = null;
-        let selectedTime = null;
-        
-        for (const marker of window.adeckMarkers) {
-            if (marker && marker._popup && marker._popup.isOpen()) {
-                selectedMarker = marker;
+        // For B-deck tracks, always show labels when zoomed in enough
+        if (isBdeckTrackLoaded) {
+            window.adeckMarkers.forEach(marker => {
+                if (!marker) return;
                 
-                // Get the time for this point
+                const markerPosition = marker.getLatLng();
+                
+                // Skip processing if marker is outside current viewport
+                if (!bounds.contains(markerPosition)) {
+                    if (marker.getTooltip()) marker.unbindTooltip();
+                    return;
+                }
+                
+                // Get this marker's time
+                let dateTimeLabel = "";
+                
                 if (marker.pointTime) {
-                    selectedTime = marker.pointTime.getTime();
+                    dateTimeLabel = formatPointTime(marker.pointTime);
                 } else if (marker.stormId && window.adeckStorms) {
-                    // Try to calculate from storm data
                     const storm = window.adeckStorms.find(s => s.id === marker.stormId);
                     if (storm && storm.points && marker.pointIndex !== undefined) {
                         const point = storm.points[marker.pointIndex];
                         if (point) {
                             if (point.pointTime) {
-                                selectedTime = point.pointTime.getTime();
+                                dateTimeLabel = formatPointTime(point.pointTime);
                             } else if (point.initTime && point.tau !== undefined) {
                                 const pointTimeObj = calculatePointTimeFromTau(point.initTime, point.tau);
                                 if (pointTimeObj) {
-                                    selectedTime = pointTimeObj.getTime();
+                                    dateTimeLabel = formatPointTime(pointTimeObj);
                                 }
                             }
                         }
                     }
                 }
-                break; // We found our clicked marker
+                
+                // Always show labels for B-deck tracks when zoomed in enough
+                if (showLabels && dateTimeLabel) {
+                    // Add model name below the date for B-deck tracks
+                    const labelContent = `${dateTimeLabel}<br><span class="model-name-label">BEST</span>`;
+                    handleLabelVisibility(marker, labelContent, true);
+                } else {
+                    if (marker.getTooltip()) marker.unbindTooltip();
+                }
+            });
+        } else {
+            // For regular A-deck tracks, keep existing behavior of only showing labels when a point is clicked
+            let selectedMarker = null;
+            let selectedTime = null;
+            
+            for (const marker of window.adeckMarkers) {
+                if (marker && marker._popup && marker._popup.isOpen()) {
+                    selectedMarker = marker;
+                    
+                    // Get the time for this point
+                    if (marker.pointTime) {
+                        selectedTime = marker.pointTime.getTime();
+                    } else if (marker.stormId && window.adeckStorms) {
+                        // Try to calculate from storm data
+                        const storm = window.adeckStorms.find(s => s.id === marker.stormId);
+                        if (storm && storm.points && marker.pointIndex !== undefined) {
+                            const point = storm.points[marker.pointIndex];
+                            if (point) {
+                                if (point.pointTime) {
+                                    selectedTime = point.pointTime.getTime();
+                                } else if (point.initTime && point.tau !== undefined) {
+                                    const pointTimeObj = calculatePointTimeFromTau(point.initTime, point.tau);
+                                    if (pointTimeObj) {
+                                        selectedTime = pointTimeObj.getTime();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break; // We found our clicked marker
+                }
             }
-        }
-        
-        // Process all A-deck markers
-        window.adeckMarkers.forEach(marker => {
-            if (!marker) return;
             
-            const markerPosition = marker.getLatLng();
-            
-            // Skip processing if marker is outside current viewport
-            if (!bounds.contains(markerPosition)) {
-                if (marker.getTooltip()) marker.unbindTooltip();
-                return;
-            }
-            
-            // If no marker is selected or we couldn't determine its time, hide all labels
-            if (!selectedMarker || selectedTime === null) {
-                if (marker.getTooltip()) marker.unbindTooltip();
-                return;
-            }
-            
-            // Get this marker's time
-            let markerTime = null;
-            let dateTimeLabel = "";
-            
-            if (marker.pointTime) {
-                markerTime = marker.pointTime.getTime();
-                dateTimeLabel = formatPointTime(marker.pointTime);
-            } else if (marker.stormId && window.adeckStorms) {
-                const storm = window.adeckStorms.find(s => s.id === marker.stormId);
-                if (storm && storm.points && marker.pointIndex !== undefined) {
-                    const point = storm.points[marker.pointIndex];
-                    if (point) {
-                        if (point.pointTime) {
-                            markerTime = point.pointTime.getTime();
-                            dateTimeLabel = formatPointTime(point.pointTime);
-                        } else if (point.initTime && point.tau !== undefined) {
-                            const pointTimeObj = calculatePointTimeFromTau(point.initTime, point.tau);
-                            if (pointTimeObj) {
-                                markerTime = pointTimeObj.getTime();
-                                dateTimeLabel = formatPointTime(pointTimeObj);
+            // Process all A-deck markers
+            window.adeckMarkers.forEach(marker => {
+                if (!marker) return;
+                
+                const markerPosition = marker.getLatLng();
+                
+                // Skip processing if marker is outside current viewport
+                if (!bounds.contains(markerPosition)) {
+                    if (marker.getTooltip()) marker.unbindTooltip();
+                    return;
+                }
+                
+                // If no marker is selected or we couldn't determine its time, hide all labels
+                if (!selectedMarker || selectedTime === null) {
+                    if (marker.getTooltip()) marker.unbindTooltip();
+                    return;
+                }
+                
+                // Get this marker's time
+                let markerTime = null;
+                let dateTimeLabel = "";
+                
+                if (marker.pointTime) {
+                    markerTime = marker.pointTime.getTime();
+                    dateTimeLabel = formatPointTime(marker.pointTime);
+                } else if (marker.stormId && window.adeckStorms) {
+                    const storm = window.adeckStorms.find(s => s.id === marker.stormId);
+                    if (storm && storm.points && marker.pointIndex !== undefined) {
+                        const point = storm.points[marker.pointIndex];
+                        if (point) {
+                            if (point.pointTime) {
+                                markerTime = point.pointTime.getTime();
+                                dateTimeLabel = formatPointTime(point.pointTime);
+                            } else if (point.initTime && point.tau !== undefined) {
+                                const pointTimeObj = calculatePointTimeFromTau(point.initTime, point.tau);
+                                if (pointTimeObj) {
+                                    markerTime = pointTimeObj.getTime();
+                                    dateTimeLabel = formatPointTime(pointTimeObj);
+                                }
                             }
                         }
                     }
                 }
-            }
-            
-            // Only show label if:
-            // 1. This is the selected marker, OR
-            // 2. This marker's time matches the selected marker's time
-            const isSelectedMarker = marker === selectedMarker;
-            const isMatchingTime = markerTime && Math.abs(markerTime - selectedTime) < 3600000; // Within 1 hour
-            
-            if (showLabels && dateTimeLabel && (isSelectedMarker || isMatchingTime)) {
-                handleLabelVisibility(marker, dateTimeLabel, true);
-            } else {
-                if (marker.getTooltip()) marker.unbindTooltip();
-            }
-        });
+                
+                // Only show label if:
+                // 1. This is the selected marker, OR
+                // 2. This marker's time matches the selected marker's time
+                const isSelectedMarker = marker === selectedMarker;
+                const isMatchingTime = markerTime && Math.abs(markerTime - selectedTime) < 3600000; // Within 1 hour
+                
+                if (showLabels && dateTimeLabel && (isSelectedMarker || isMatchingTime)) {
+                    // Add model name below the date
+                    const labelContent = `${dateTimeLabel}<br><span class="model-name-label">${marker.model || ""}</span>`;
+                    handleLabelVisibility(marker, labelContent, true);
+                } else {
+                    if (marker.getTooltip()) marker.unbindTooltip();
+                }
+            });
+        }
     }
 }
 // Helper function to handle label visibility with model-specific colors
@@ -8079,7 +8125,7 @@ function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
                 tooltipElement.style.backgroundColor = backgroundColor;
                 tooltipElement.style.color = textColor;
                 tooltipElement.style.border = '1px solid rgba(255,255,255,0.3)';
-                
+
                 // Apply color to tooltip arrow too
                 const arrow = tooltipElement.querySelector('.leaflet-tooltip-tip');
                 if (arrow) {

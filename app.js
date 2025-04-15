@@ -1222,6 +1222,78 @@ function calculateWedgePoints(lat, lon, radius, startAngle, endAngle, steps = 32
     return points;
 }
 
+// Function to display R34 outlines for a selected A-deck track
+function displayAdeckR34Outlines(stormId) {
+    // Clear any existing R34 outlines first
+    clearAllStormVisualizations();
+    
+    // Skip if no storm ID provided
+    if (!stormId || !window.adeckStorms) return;
+    
+    // Find the selected storm
+    const storm = window.adeckStorms.find(s => s.id === stormId);
+    if (!storm || !storm.points || storm.points.length === 0) return;
+    
+    console.log(`Displaying R34 outlines for ${storm.model} track`);
+    
+    // Process each point in the storm track
+    storm.points.forEach((point, index) => {
+        // Check if we have R34 data for this point
+        if ((point.r34_ne && !isNaN(point.r34_ne)) || 
+            (point.r34_se && !isNaN(point.r34_se)) || 
+            (point.r34_sw && !isNaN(point.r34_sw)) || 
+            (point.r34_nw && !isNaN(point.r34_nw)) ||
+            (point.radius_of_34_kt_winds_ne_m && !isNaN(point.radius_of_34_kt_winds_ne_m)) || 
+            (point.radius_of_34_kt_winds_se_m && !isNaN(point.radius_of_34_kt_winds_se_m)) || 
+            (point.radius_of_34_kt_winds_sw_m && !isNaN(point.radius_of_34_kt_winds_sw_m)) || 
+            (point.radius_of_34_kt_winds_nw_m && !isNaN(point.radius_of_34_kt_winds_nw_m))) {
+            
+            // Get R34 values, with appropriate fallbacks
+            const r34_ne = point.r34_ne || point.radius_of_34_kt_winds_ne_m || 0;
+            const r34_se = point.r34_se || point.radius_of_34_kt_winds_se_m || 0;
+            const r34_sw = point.r34_sw || point.radius_of_34_kt_winds_sw_m || 0;
+            const r34_nw = point.r34_nw || point.radius_of_34_kt_winds_nw_m || 0;
+            
+            // Skip if no actual R34 data
+            if (r34_ne === 0 && r34_se === 0 && r34_sw === 0 && r34_nw === 0) return;
+            
+            // Generate outline points
+            const center = [point.latitude, point.longitude];
+            const outlinePoints = calculateR34OutlinePoints(
+                center[0], center[1], r34_ne, r34_se, r34_sw, r34_nw
+            );
+            
+            if (outlinePoints && outlinePoints.length > 2) {
+                // Create a container for this point's visualizations if it doesn't exist
+                if (!stormCircles[index]) {
+                    stormCircles[index] = [];
+                }
+                
+                // Use the model color for the outline
+                const modelColor = MODEL_COLORS[storm.model] || "#32A0D9"; // Default to blue if no color defined
+                
+                // Create a polygon for the outline
+                const outlinePolygon = L.polygon(outlinePoints, {
+                    color: modelColor,
+                    fillColor: modelColor,
+                    fillOpacity: 0.05,
+                    weight: 1.5,
+                    dashArray: '3, 5', // Dashed line for better visual distinction
+                    className: 'storm-attribute r34-outline adeck-r34-outline'
+                }).addTo(map);
+                
+                outlinePolygon.stormAttribute = 'r34-outline';
+                outlinePolygon.pointIndex = index;
+                outlinePolygon.stormId = stormId;
+                outlinePolygon.model = storm.model;
+                
+                stormCircles[index].push(outlinePolygon);
+            }
+        }
+    });
+}
+
+
 // Calculate points for a unified R34 outline (combining all quadrants)
 function calculateR34OutlinePoints(lat, lon, r34_ne, r34_se, r34_sw, r34_nw) {
     const points = [];
@@ -5148,7 +5220,7 @@ function updateAdeckSymbology() {
             if (isBdeckTrackLoaded && zoomLevel <= 7) {
                 console.log('Displaying storm structures for B-deck points');
                 displayBdeckStructuresForVisiblePoints(bounds);
-            } else if (zoomLevel >= 7) {
+            } else if (zoomLevel >= 7 && zoomLevel <= labelMinZoom) {
                 // Clear storm structures when zooming out
                 clearAllStormVisualizations();
             }
@@ -5338,7 +5410,7 @@ function displayBdeckStructuresForVisiblePoints(bounds) {
         // Check if marker is in view
         const markerPosition = marker.getLatLng();
         if (!bounds.contains(markerPosition)) return;
-        console.log('Marker in bounds:', markerPosition);
+        //console.log('Marker in bounds:', markerPosition);
         
         // Find the corresponding storm and point
         const stormId = marker.stormId;
@@ -5347,7 +5419,7 @@ function displayBdeckStructuresForVisiblePoints(bounds) {
         // Skip if we've already processed this point
         const pointKey = `${stormId}-${pointIndex}`;
         if (processedPoints.has(pointKey)) return;
-        console.log('Processing point:', pointKey);
+        //console.log('Processing point:', pointKey);
         processedPoints.add(pointKey);
         
         // Find the storm data
@@ -5392,6 +5464,9 @@ map.on('moveend', function() {
 
 // Select a specific A-deck track and highlight it
 function selectAdeckTrack(stormId) {
+    // Clear any existing R34 outlines first
+    clearAllStormVisualizations();
+    
     // Store the selected storm ID
     selectedStormId = stormId;
     
@@ -5443,6 +5518,9 @@ function selectAdeckTrack(stormId) {
             }
         });
     }
+    
+    // Display R34 outlines for the selected track
+    displayAdeckR34Outlines(stormId);
     
     // Show notification about selected model
     if (selectedModel) {
@@ -5623,7 +5701,6 @@ if (!window.formatPopupContent) {
     };
 }
 
-// New function to deselect all points and clear visualizations
 function deselectAll() {
     // Reset selected point
     selectedPoint = null;
@@ -7989,7 +8066,9 @@ function updateDateLabels() {
     // Check if map zoom is within the desired range
     const showLabels = zoom >= labelMinZoom && zoom < labelMaxZoom;
     
-    // First handle regular CSV tracks (keep existing behavior)
+    console.log(`Updating date labels at zoom ${zoom}, showLabels: ${showLabels}`);
+    
+    // First handle regular CSV tracks
     if (data && data.length > 0 && markers && markers.length > 0) {
         markers.forEach((marker, index) => {
             if (index >= data.length) return; // Safety check
@@ -7999,7 +8078,7 @@ function updateDateLabels() {
             
             // Skip processing if marker is outside current viewport
             if (!bounds.contains(markerPosition)) {
-                if (marker.getTooltip()) marker.closeTooltip();
+                if (marker.getTooltip()) marker.unbindTooltip();
                 return;
             }
             
@@ -8014,15 +8093,7 @@ function updateDateLabels() {
                     point.minute_utc || 0
                 ));
                 
-                dateTimeLabel = date.toLocaleString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'UTC',
-                    hour12: false
-                }) + " UTC";
+                dateTimeLabel = formatPointTime(date);
             }
             
             // Show/hide label based on zoom level
@@ -8034,7 +8105,10 @@ function updateDateLabels() {
     if (window.adeckMarkers && window.adeckMarkers.length > 0) {
         // For B-deck tracks, always show labels when zoomed in enough
         if (isBdeckTrackLoaded) {
-            window.adeckMarkers.forEach(marker => {
+            console.log(`Processing B-deck markers, found ${window.adeckMarkers.length} markers`);
+            let labelCount = 0;
+            
+            window.adeckMarkers.forEach((marker, idx) => {
                 if (!marker) return;
                 
                 const markerPosition = marker.getLatLng();
@@ -8045,42 +8119,60 @@ function updateDateLabels() {
                     return;
                 }
                 
-                // Get this marker's time
+                // For B-deck tracks, extract time data from storm points
                 let dateTimeLabel = "";
                 
-                if (marker.pointTime) {
-                    dateTimeLabel = formatPointTime(marker.pointTime);
-                } else if (marker.stormId && window.adeckStorms) {
-                    const storm = window.adeckStorms.find(s => s.id === marker.stormId);
+                if (marker.stormId && window.adeckStorms) {
+                    // With B-deck, there's usually just one storm, so we can simplify the lookup
+                    const storm = window.adeckStorms[0]; // For B-deck, use the first storm
+                    
                     if (storm && storm.points && marker.pointIndex !== undefined) {
                         const point = storm.points[marker.pointIndex];
+                        
                         if (point) {
+                            // Try all possible time representations
                             if (point.pointTime) {
                                 dateTimeLabel = formatPointTime(point.pointTime);
-                            } else if (point.initTime && point.tau !== undefined) {
-                                const pointTimeObj = calculatePointTimeFromTau(point.initTime, point.tau);
-                                if (pointTimeObj) {
-                                    dateTimeLabel = formatPointTime(pointTimeObj);
-                                }
+                            } else if (point.time) {
+                                dateTimeLabel = formatPointTime(new Date(point.time));
+                            } else if (point.year_utc && point.month_utc && point.day_utc) {
+                                // Format from YMD components
+                                const timeObj = new Date(Date.UTC(
+                                    point.year_utc,
+                                    point.month_utc - 1, // JavaScript months are 0-indexed
+                                    point.day_utc,
+                                    point.hour_utc || 0,
+                                    point.minute_utc || 0
+                                ));
+                                dateTimeLabel = formatPointTime(timeObj);
                             }
                         }
                     }
                 }
                 
-                // Always show labels for B-deck tracks when zoomed in enough
-                if (showLabels && dateTimeLabel) {
+                // Show labels for B-deck tracks when zoomed in enough
+                if (showLabels) {
+                    // If we still don't have a date label, use a generic one
+                    if (!dateTimeLabel) {
+                        dateTimeLabel = `Point ${marker.pointIndex || idx}`;
+                    }
+                    
                     // Add model name below the date for B-deck tracks
                     const labelContent = `${dateTimeLabel}<br><span class="model-name-label">BEST</span>`;
                     handleLabelVisibility(marker, labelContent, true);
+                    labelCount++;
                 } else {
                     if (marker.getTooltip()) marker.unbindTooltip();
                 }
             });
+            
+            console.log(`Applied labels to ${labelCount} B-deck markers`);
         } else {
-            // For regular A-deck tracks, keep existing behavior of only showing labels when a point is clicked
+            // For regular A-deck tracks
             let selectedMarker = null;
             let selectedTime = null;
             
+            // Find if any marker has an open popup (selected)
             for (const marker of window.adeckMarkers) {
                 if (marker && marker._popup && marker._popup.isOpen()) {
                     selectedMarker = marker;

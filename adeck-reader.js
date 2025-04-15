@@ -1385,6 +1385,15 @@ function parseBdeckFile(content) {
         const windSpeed = parseInt(fields[8]);
         const pressure = parseInt(fields[9]);
         const stormType = fields[10];
+
+        // Extract RMW field (field #19) - remember array is 0-indexed
+        let rmw = null;
+        if (fields.length >= 19 && fields[20] && fields[20].trim() !== '') {
+            const rmwValue = parseInt(fields[20].trim());
+            if (!isNaN(rmwValue) && rmwValue > 0) {
+                rmw = rmwValue * 1852; // Convert from NM to meters
+            }
+        }
         
         // Check if there's R34 data
         const hasR34 = fields[11] === "34";
@@ -1433,6 +1442,7 @@ function parseBdeckFile(content) {
           wind_speed: windSpeed * 0.514444, // Convert knots to m/s
           mslp: pressure,
           stormType,
+          rmw, // RMW in meters
           // Use long-form names for compatibility with visualization code
           radius_of_34_kt_winds_ne_m: r34_ne,
           radius_of_34_kt_winds_se_m: r34_se, 

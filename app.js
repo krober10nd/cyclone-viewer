@@ -1361,6 +1361,10 @@ function calculateArcPoints(lat, lon, radius, startAngle, endAngle, steps = 8) {
 
 // Display storm attributes visualization - Modified to show unified R34 outline for B-deck
 function displayStormAttributes(pointIndex, my_point=null) {
+    // Get current zoom level
+    const currentZoom = map.getZoom();
+    const isHighZoom = currentZoom >= 10; // Consider zoom level 10+ as "fully zoomed in"
+    
     // check if my point is null
     if (my_point != null) {
         // Use the provided point if available
@@ -1379,14 +1383,14 @@ function displayStormAttributes(pointIndex, my_point=null) {
     // Calculate conversion ratio based on latitude
     const center = [point.latitude, point.longitude];
     
-    // 1. RMW - Radius of Maximum Winds (red circle) - Only if data exists
+    // 1. RMW - Radius of Maximum Winds (red circle) - Always show if data exists
     if (point.rmw !== undefined && !isNaN(point.rmw)) {
         const rmwCircle = L.circle(center, {
             color: 'red',
             fillColor: '#f03',
             fillOpacity: 0.1,
             weight: 1,
-            radius: point.rmw, // Already in meters, correct usage
+            radius: point.rmw, // Already in meters
             className: 'storm-attribute rmw-circle'
         }).addTo(map);
         
@@ -1400,116 +1404,121 @@ function displayStormAttributes(pointIndex, my_point=null) {
         }
     }
     
-    // 2. ROCI - Radius of Outermost Closed Isobar (grey circle) - Only if data exists
-    if (point.roci !== undefined && !isNaN(point.roci)) {
-        const rociCircle = L.circle(center, {
-            color: 'grey',
-            fillColor: '#aaaaaa',
-            fillOpacity: 0.1,
-            weight: 1,
-            radius: point.roci, // Already in meters, correct usage
-            className: 'storm-attribute roci-circle'
-        }).addTo(map);
-        
-        rociCircle.stormAttribute = 'roci';
-        rociCircle.pointIndex = pointIndex;
-        stormCircles[pointIndex].push(rociCircle);
-        
-        // Make ROCI editable with dragging in edit mode
-        if (editMode) {
-            makeCircleEditable(rociCircle, pointIndex);
-        }
-    }
-    
-    // 3. R34 visualization - Different approach for B-deck tracks
-    if (isBdeckTrackLoaded) {
-        // For B-deck tracks: create a unified outline instead of separate wedges
-        // Check if we have any R34 data
-        if ((point.r34_ne && !isNaN(point.r34_ne)) || 
-            (point.r34_se && !isNaN(point.r34_se)) || 
-            (point.r34_sw && !isNaN(point.r34_sw)) || 
-            (point.r34_nw && !isNaN(point.r34_nw))) {
-            
-            // Get R34 values, defaulting to 0 if not available
-            const r34_ne = point.r34_ne || point.radius_of_34_kt_winds_ne_m;
-            const r34_se = point.r34_se || point.radius_of_34_kt_winds_se_m;
-            const r34_sw = point.r34_sw || point.radius_of_34_kt_winds_sw_m;
-            const r34_nw = point.r34_nw || point.radius_of_34_kt_winds_nw_m;
-            
-            // Generate outline points combining all quadrants
-            const outlinePoints = calculateR34OutlinePoints(
-                center[0], center[1], r34_ne, r34_se, r34_sw, r34_nw
-            );
-            
-            if (outlinePoints.length > 2) {
-                // Create a polygon for the outline
-                const outlinePolygon = L.polygon(outlinePoints, {
-                    color: '#32A0D9', // Blue color for R34 outline
-                    fillColor: '#32A0D9',
-                    fillOpacity: 0.05,
-                    weight: 1.5,
-                    dashArray: '3, 5', // Dashed line for better visual distinction
-                    className: 'storm-attribute r34-outline'
-                }).addTo(map);
-                
-                outlinePolygon.stormAttribute = 'r34-outline';
-                outlinePolygon.pointIndex = pointIndex;
-                stormCircles[pointIndex].push(outlinePolygon);
-            }
-        }
-    } else {
-        // For regular tracks: use the original separate wedges
-        const wedgeColors = {
-            r34_ne: '#00aaff',  // NE - Light blue
-            r34_se: '#00ccaa',  // SE - Teal
-            r34_sw: '#ffaa00',  // SW - Orange
-            r34_nw: '#ff00aa'   // NW - Pink
-        };
-        
-        const wedges = [
-            { attr: 'r34_ne', start: 0, end: 90 },
-            { attr: 'r34_se', start: 90, end: 180 },
-            { attr: 'r34_sw', start: 180, end: 270 },
-            { attr: 'r34_nw', start: 270, end: 360 }
-        ];
-        
-        wedges.forEach(wedge => {
-            let radius = point[wedge.attr];
-            console.log(`Wedge ${wedge.attr} radius:`, radius);
-            // Skip if radius is undefined or NaN
-            if (radius === undefined || isNaN(radius)) return;
-            
-            // Convert meters to NM for the wedge calculation
-            const radiusNM = radius / UNIT_CONVERSIONS.NM_TO_M;
-            
-            const wedgePoints = calculateWedgePoints(
-                point.latitude, 
-                point.longitude, 
-                radiusNM, // Pass value in NM since calculateWedgePoints expects NM
-                wedge.start, 
-                wedge.end
-            );
-            
-            const wedgePolygon = L.polygon(wedgePoints, {
-                color: wedgeColors[wedge.attr],
-                fillColor: wedgeColors[wedge.attr],
-                fillOpacity: 0.2,
+    // Only show the following elements if NOT at high zoom
+    if (!isHighZoom) {
+        // 2. ROCI - Radius of Outermost Closed Isobar (grey circle)
+        if (point.roci !== undefined && !isNaN(point.roci)) {
+            const rociCircle = L.circle(center, {
+                color: 'grey',
+                fillColor: '#aaaaaa',
+                fillOpacity: 0.1,
                 weight: 1,
-                className: `storm-attribute r34-wedge ${wedge.attr}`
+                radius: point.roci,
+                className: 'storm-attribute roci-circle'
             }).addTo(map);
             
-            wedgePolygon.stormAttribute = wedge.attr;
-            wedgePolygon.pointIndex = pointIndex;
-            stormCircles[pointIndex].push(wedgePolygon);
+            rociCircle.stormAttribute = 'roci';
+            rociCircle.pointIndex = pointIndex;
+            stormCircles[pointIndex].push(rociCircle);
             
-            // Make wedges editable in edit mode
+            // Make ROCI editable with dragging in edit mode
             if (editMode) {
-                makeWedgeEditable(wedgePolygon, pointIndex, wedge.attr, wedge.start, wedge.end);
+                makeCircleEditable(rociCircle, pointIndex);
             }
-        });
+        }
+        
+        // 3. R34 visualization - Different approach for B-deck tracks
+        if (isBdeckTrackLoaded) {
+            // For B-deck tracks: create a unified outline instead of separate wedges
+            // Check if we have any R34 data
+            if ((point.r34_ne && !isNaN(point.r34_ne)) || 
+                (point.r34_se && !isNaN(point.r34_se)) || 
+                (point.r34_sw && !isNaN(point.r34_sw)) || 
+                (point.r34_nw && !isNaN(point.r34_nw))) {
+                
+                // Get R34 values, defaulting to 0 if not available
+                const r34_ne = point.r34_ne || point.radius_of_34_kt_winds_ne_m;
+                const r34_se = point.r34_se || point.radius_of_34_kt_winds_se_m;
+                const r34_sw = point.r34_sw || point.radius_of_34_kt_winds_sw_m;
+                const r34_nw = point.r34_nw || point.radius_of_34_kt_winds_nw_m;
+                
+                // Generate outline points combining all quadrants
+                const outlinePoints = calculateR34OutlinePoints(
+                    center[0], center[1], r34_ne, r34_se, r34_sw, r34_nw
+                );
+                
+                if (outlinePoints.length > 2) {
+                    // Check if this is the selected point to determine whether to show the border
+                    const isSelectedPoint = selectedPointIndex === pointIndex;
+                    
+                    // Create a polygon for the outline
+                    const outlinePolygon = L.polygon(outlinePoints, {
+                        color: '#000000', // Black color for R34 outline
+                        fillColor: '#FFD700',
+                        fillOpacity: 0.05,
+                        weight: isSelectedPoint ? 2.5 : 0.5, // Only show border for selected point
+                        dashArray: '3, 5', // Dashed line for better visual distinction (only visible when weight > 0)
+                        className: 'storm-attribute r34-outline'
+                    }).addTo(map);
+                    
+                    outlinePolygon.stormAttribute = 'r34-outline';
+                    outlinePolygon.pointIndex = pointIndex;
+                    stormCircles[pointIndex].push(outlinePolygon);
+                }
+            }
+        } else {
+            // For regular tracks: use the original separate wedges
+            const wedgeColors = {
+                r34_ne: '#00aaff',  // NE - Light blue
+                r34_se: '#00ccaa',  // SE - Teal
+                r34_sw: '#ffaa00',  // SW - Orange
+                r34_nw: '#ff00aa'   // NW - Pink
+            };
+            
+            const wedges = [
+                { attr: 'r34_ne', start: 0, end: 90 },
+                { attr: 'r34_se', start: 90, end: 180 },
+                { attr: 'r34_sw', start: 180, end: 270 },
+                { attr: 'r34_nw', start: 270, end: 360 }
+            ];
+            
+            wedges.forEach(wedge => {
+                let radius = point[wedge.attr];
+                console.log(`Wedge ${wedge.attr} radius:`, radius);
+                // Skip if radius is undefined or NaN
+                if (radius === undefined || isNaN(radius)) return;
+                
+                // Convert meters to NM for the wedge calculation
+                const radiusNM = radius / UNIT_CONVERSIONS.NM_TO_M;
+                
+                const wedgePoints = calculateWedgePoints(
+                    point.latitude, 
+                    point.longitude, 
+                    radiusNM, // Pass value in NM since calculateWedgePoints expects NM
+                    wedge.start, 
+                    wedge.end
+                );
+                
+                const wedgePolygon = L.polygon(wedgePoints, {
+                    color: wedgeColors[wedge.attr],
+                    fillColor: wedgeColors[wedge.attr],
+                    fillOpacity: 0.2,
+                    weight: 1,
+                    className: `storm-attribute r34-wedge ${wedge.attr}`
+                }).addTo(map);
+                
+                wedgePolygon.stormAttribute = wedge.attr;
+                wedgePolygon.pointIndex = pointIndex;
+                stormCircles[pointIndex].push(wedgePolygon);
+                
+                // Make wedges editable in edit mode
+                if (editMode) {
+                    makeWedgeEditable(wedgePolygon, pointIndex, wedge.attr, wedge.start, wedge.end);
+                }
+            });
+        }
     }
 }
-
 // Make circle editable with dragging - UPDATE to store meters
 function makeCircleEditable(circle, pointIndex) {
     // Add a drag handle on circle edge
@@ -5206,6 +5215,7 @@ function removeAdeckTracks() {
 function updateAdeckSymbology() {
     const zoomLevel = map.getZoom();
     const bounds = map.getBounds(); // Get current map bounds for pan detection
+    const isHighZoom = zoomLevel >= 10; // Match the threshold used in displayStormAttributes
 
     console.log('Updating A-deck symbology at zoom level:', zoomLevel);
     
@@ -5217,16 +5227,6 @@ function updateAdeckSymbology() {
             
             // Get the storm ID either directly from marker or from options
             const stormId = marker.stormId || (marker.options && marker.options.stormId);
-            
-            // Show storm structure at higher zoom levels for B-deck tracks
-            if (isBdeckTrackLoaded && zoomLevel <= 7) {
-                console.log('Displaying storm structures for B-deck points');
-                displayBdeckStructuresForVisiblePoints(bounds);
-            } else if (zoomLevel >= 7 && zoomLevel <= labelMinZoom) {
-                // Clear storm structures when zooming out
-                clearAllStormVisualizations();
-            }
-
             
             // Check if this marker belongs to a hidden track
             const shouldBeHidden = stormId && 
@@ -5296,7 +5296,6 @@ function updateAdeckSymbology() {
                 }
             }
             
-            // At this point, the marker is visible, apply zoom-based styling
             // Scale marker size based on zoom level
             if (marker.setRadius) {
                 let radius;
@@ -5391,6 +5390,21 @@ function updateAdeckSymbology() {
             }
         });
     }
+    
+    // At high zoom levels, only show RMW and clear other structures
+    if (isHighZoom) {
+        // Clear all storm visualizations except RMW
+        clearAllStormVisualizationsExceptRMW();
+    }
+    // At medium zoom levels, display structures for B-deck points
+    else if (isBdeckTrackLoaded && zoomLevel <= 7) {
+        console.log('Displaying storm structures for B-deck points');
+        displayBdeckStructuresForVisiblePoints(bounds);
+    }
+    // At low zoom levels, clear all structures
+    else if (zoomLevel < 7) {
+        clearAllStormVisualizations();
+    }
 }
 
 // Function to display storm structures for visible B-deck points
@@ -5412,7 +5426,6 @@ function displayBdeckStructuresForVisiblePoints(bounds) {
         // Check if marker is in view
         const markerPosition = marker.getLatLng();
         if (!bounds.contains(markerPosition)) return;
-        //console.log('Marker in bounds:', markerPosition);
         
         // Find the corresponding storm and point
         const stormId = marker.stormId;
@@ -5421,7 +5434,6 @@ function displayBdeckStructuresForVisiblePoints(bounds) {
         // Skip if we've already processed this point
         const pointKey = `${stormId}-${pointIndex}`;
         if (processedPoints.has(pointKey)) return;
-        //console.log('Processing point:', pointKey);
         processedPoints.add(pointKey);
         
         // Find the storm data
@@ -5429,7 +5441,6 @@ function displayBdeckStructuresForVisiblePoints(bounds) {
         if (!storm || !storm.points || !storm.points[pointIndex]) return;
         
         const point = storm.points[pointIndex];
-
         
         // Create a structured point object for visualization
         const structuredPoint = {
@@ -5443,17 +5454,31 @@ function displayBdeckStructuresForVisiblePoints(bounds) {
             roci: point.roci,
         };
         
-        // Only display structures if the point has any structure data
-        // print out storm scale info 
-        console.log(point)
         // Create container for this point's visualizations if it doesn't exist
         if (!stormCircles[pointIndex]) {
             stormCircles[pointIndex] = [];
         }
+        
         // Use existing displayStormAttributes function to show the visualization
         displayStormAttributes(pointIndex, my_point = structuredPoint);
     });
 }
+function clearAllStormVisualizationsExceptRMW() {
+    Object.keys(stormCircles).forEach(pointId => {
+        const pointIndex = parseInt(pointId);
+        if (stormCircles[pointIndex]) {
+            stormCircles[pointIndex].forEach(layer => {
+                // Keep only RMW circles
+                if (layer.stormAttribute !== 'rmw') {
+                    map.removeLayer(layer);
+                }
+            });
+            // Filter the array to keep only RMW circles
+            stormCircles[pointIndex] = stormCircles[pointIndex].filter(layer => layer.stormAttribute === 'rmw');
+        }
+    });
+}
+
 
 // Update map event handlers to call updateAdeckSymbology on moveend too
 map.on('moveend', function() {
@@ -7666,9 +7691,7 @@ function removeAdeckTracks() {
     }
 }
 
-
 // Existing ADECK file handler needs to call our displayAdeckTracks function
-// Update handleAdeckFileSelect or anywhere else that loads ADECK data
 function handleAdeckFileSelect(event) {
     const files = event.target.files;
     if (files.length > 0) {
@@ -8123,6 +8146,7 @@ function updateDateLabels() {
                 
                 // For B-deck tracks, extract time data from storm points
                 let dateTimeLabel = "";
+                let windSpeed = null;
                 
                 if (marker.stormId && window.adeckStorms) {
                     // With B-deck, there's usually just one storm, so we can simplify the lookup
@@ -8132,6 +8156,9 @@ function updateDateLabels() {
                         const point = storm.points[marker.pointIndex];
                         
                         if (point) {
+                            // Extract wind speed
+                            windSpeed = point.wind_speed;
+                            
                             // Try all possible time representations
                             if (point.pointTime) {
                                 dateTimeLabel = formatPointTime(point.pointTime);
@@ -8159,8 +8186,11 @@ function updateDateLabels() {
                         dateTimeLabel = `Point ${marker.pointIndex || idx}`;
                     }
                     
-                    // Add model name below the date for B-deck tracks
-                    const labelContent = `${dateTimeLabel}<br><span class="model-name-label">BEST</span>`;
+                    // Format the wind speed for display
+                    const windLabel = isSpecified(windSpeed) ? formatWindSpeed(windSpeed) : "No Wind Data";
+                    
+                    // Add model name and wind speed below the date for B-deck tracks
+                    const labelContent = `${dateTimeLabel}<br><span class="model-name-label">BEST</span> | <span class="wind-label">${windLabel}</span>`;
                     handleLabelVisibility(marker, labelContent, true);
                     labelCount++;
                 } else {
@@ -8300,7 +8330,6 @@ function handleLabelVisibility(marker, dateTimeLabel, showLabels) {
             `date-time-label model-${marker.model.toLowerCase().replace(/[^a-z0-9]/g, '-')}` : 
             'date-time-label';
         
-        // Rest of the function remains the same...
         const tooltipOptions = {
             permanent: true,
             direction: 'top',

@@ -2642,7 +2642,7 @@ function selectPoint(index) {
     }
     
     // Display storm attributes, including R34 wedges, for ADECK points
-    if (!editMode) {
+    if (!editMode || !isBdeckTrackLoaded) {
         clearStormVisualizations(index);
         displayStormAttributes(index); // This will now include R34 wedges
 
@@ -2891,6 +2891,8 @@ function exportData() {
 // Load CSV file - updated to remove table references
 async function loadCSVFile(file) {
     try {
+        isBdeckTrackLoaded = false;
+
         // Show loading indicator
         document.getElementById('loading-indicator').classList.remove('hidden');
         

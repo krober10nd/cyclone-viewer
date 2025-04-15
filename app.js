@@ -1222,7 +1222,72 @@ function calculateWedgePoints(lat, lon, radius, startAngle, endAngle, steps = 32
     return points;
 }
 
-// Display storm attributes visualization - Fix meter to km conversion
+// Calculate points for a unified R34 outline (combining all quadrants)
+function calculateR34OutlinePoints(lat, lon, r34_ne, r34_se, r34_sw, r34_nw) {
+    const points = [];
+    
+    // Calculate points for each quadrant in sequence to form a continuous outline
+    
+    // NE quadrant - 0 to 90 degrees
+    if (r34_ne && !isNaN(r34_ne)) {
+        const radiusNM = r34_ne / UNIT_CONVERSIONS.NM_TO_M;
+        const nePoints = calculateArcPoints(lat, lon, radiusNM, 0, 90);
+        points.push(...nePoints);
+    }
+    
+    // SE quadrant - 90 to 180 degrees
+    if (r34_se && !isNaN(r34_se)) {
+        const radiusNM = r34_se / UNIT_CONVERSIONS.NM_TO_M;
+        const sePoints = calculateArcPoints(lat, lon, radiusNM, 90, 180);
+        points.push(...sePoints);
+    }
+    
+    // SW quadrant - 180 to 270 degrees
+    if (r34_sw && !isNaN(r34_sw)) {
+        const radiusNM = r34_sw / UNIT_CONVERSIONS.NM_TO_M;
+        const swPoints = calculateArcPoints(lat, lon, radiusNM, 180, 270);
+        points.push(...swPoints);
+    }
+    
+    // NW quadrant - 270 to 360 degrees
+    if (r34_nw && !isNaN(r34_nw)) {
+        const radiusNM = r34_nw / UNIT_CONVERSIONS.NM_TO_M;
+        const nwPoints = calculateArcPoints(lat, lon, radiusNM, 270, 360);
+        points.push(...nwPoints);
+    }
+    
+    // Close the polygon by returning to the first point
+    if (points.length > 0) {
+        points.push(points[0]);
+    }
+    
+    return points;
+}
+
+// Helper function to calculate arc points for a quadrant
+function calculateArcPoints(lat, lon, radius, startAngle, endAngle, steps = 8) {
+    const points = [];
+    
+    // Convert nautical miles to approximate degrees
+    const conversion = nmToDegrees(radius, lat);
+    
+    // Calculate points along the arc
+    for (let i = 0; i <= steps; i++) {
+        const angle = startAngle + (endAngle - startAngle) * (i / steps);
+        const radian = angle * Math.PI / 180;
+        
+        // Calculate offset (different for lat/lon due to earth's shape)
+        const latOffset = conversion.lat * Math.sin(radian);
+        const lonOffset = conversion.lon * Math.cos(radian);
+        
+        points.push([lat + latOffset, lon + lonOffset]);
+    }
+    
+    return points;
+}
+
+
+// Display storm attributes visualization - Modified to show unified R34 outline for B-deck
 function displayStormAttributes(pointIndex, my_point=null) {
     // check if my point is null
     if (my_point != null) {
@@ -1233,7 +1298,6 @@ function displayStormAttributes(pointIndex, my_point=null) {
         point = data[pointIndex];
     }
 
-    
     // Clear existing visualizations
     clearStormVisualizations(pointIndex);
     
@@ -1285,56 +1349,93 @@ function displayStormAttributes(pointIndex, my_point=null) {
         }
     }
     
-    // 3. R34 wedges - for each quadrant - Only if data exists
-    const wedgeColors = {
-        r34_ne: '#00aaff',  // NE - Light blue
-        r34_se: '#00ccaa',  // SE - Teal
-        r34_sw: '#ffaa00',  // SW - Orange
-        r34_nw: '#ff00aa'   // NW - Pink
-    };
-    
-    const wedges = [
-        { attr: 'r34_ne', start: 0, end: 90 },
-        { attr: 'r34_se', start: 90, end: 180 },
-        { attr: 'r34_sw', start: 180, end: 270 },
-        { attr: 'r34_nw', start: 270, end: 360 }
-    ];
-    
-    wedges.forEach(wedge => {
-        let radius = point[wedge.attr];
-        console.log(`Wedge ${wedge.attr} radius:`, radius);
-        // Skip if radius is undefined or NaN
-        if (radius === undefined || isNaN(radius)) return;
-        
-        // Convert meters to NM for the wedge calculation
-        //const radiusNM = radius / UNIT_CONVERSIONS.NM_TO_M;
-        const radiusNM = radius / UNIT_CONVERSIONS.NM_TO_M; // Convert meters to nautical miles
-        
-        const wedgePoints = calculateWedgePoints(
-            point.latitude, 
-            point.longitude, 
-            radiusNM, // Pass value in NM since calculateWedgePoints expects NM
-            wedge.start, 
-            wedge.end
-        );
-        
-        const wedgePolygon = L.polygon(wedgePoints, {
-            color: wedgeColors[wedge.attr],
-            fillColor: wedgeColors[wedge.attr],
-            fillOpacity: 0.2,
-            weight: 1,
-            className: `storm-attribute r34-wedge ${wedge.attr}`
-        }).addTo(map);
-        
-        wedgePolygon.stormAttribute = wedge.attr;
-        wedgePolygon.pointIndex = pointIndex;
-        stormCircles[pointIndex].push(wedgePolygon);
-        
-        // Make wedges editable in edit mode
-        if (editMode) {
-            makeWedgeEditable(wedgePolygon, pointIndex, wedge.attr, wedge.start, wedge.end);
+    // 3. R34 visualization - Different approach for B-deck tracks
+    if (isBdeckTrackLoaded) {
+        // For B-deck tracks: create a unified outline instead of separate wedges
+        // Check if we have any R34 data
+        if ((point.r34_ne && !isNaN(point.r34_ne)) || 
+            (point.r34_se && !isNaN(point.r34_se)) || 
+            (point.r34_sw && !isNaN(point.r34_sw)) || 
+            (point.r34_nw && !isNaN(point.r34_nw))) {
+            
+            // Get R34 values, defaulting to 0 if not available
+            const r34_ne = point.r34_ne || point.radius_of_34_kt_winds_ne_m;
+            const r34_se = point.r34_se || point.radius_of_34_kt_winds_se_m;
+            const r34_sw = point.r34_sw || point.radius_of_34_kt_winds_sw_m;
+            const r34_nw = point.r34_nw || point.radius_of_34_kt_winds_nw_m;
+            
+            // Generate outline points combining all quadrants
+            const outlinePoints = calculateR34OutlinePoints(
+                center[0], center[1], r34_ne, r34_se, r34_sw, r34_nw
+            );
+            
+            if (outlinePoints.length > 2) {
+                // Create a polygon for the outline
+                const outlinePolygon = L.polygon(outlinePoints, {
+                    color: '#32A0D9', // Blue color for R34 outline
+                    fillColor: '#32A0D9',
+                    fillOpacity: 0.05,
+                    weight: 1.5,
+                    dashArray: '3, 5', // Dashed line for better visual distinction
+                    className: 'storm-attribute r34-outline'
+                }).addTo(map);
+                
+                outlinePolygon.stormAttribute = 'r34-outline';
+                outlinePolygon.pointIndex = pointIndex;
+                stormCircles[pointIndex].push(outlinePolygon);
+            }
         }
-    });
+    } else {
+        // For regular tracks: use the original separate wedges
+        const wedgeColors = {
+            r34_ne: '#00aaff',  // NE - Light blue
+            r34_se: '#00ccaa',  // SE - Teal
+            r34_sw: '#ffaa00',  // SW - Orange
+            r34_nw: '#ff00aa'   // NW - Pink
+        };
+        
+        const wedges = [
+            { attr: 'r34_ne', start: 0, end: 90 },
+            { attr: 'r34_se', start: 90, end: 180 },
+            { attr: 'r34_sw', start: 180, end: 270 },
+            { attr: 'r34_nw', start: 270, end: 360 }
+        ];
+        
+        wedges.forEach(wedge => {
+            let radius = point[wedge.attr];
+            console.log(`Wedge ${wedge.attr} radius:`, radius);
+            // Skip if radius is undefined or NaN
+            if (radius === undefined || isNaN(radius)) return;
+            
+            // Convert meters to NM for the wedge calculation
+            const radiusNM = radius / UNIT_CONVERSIONS.NM_TO_M;
+            
+            const wedgePoints = calculateWedgePoints(
+                point.latitude, 
+                point.longitude, 
+                radiusNM, // Pass value in NM since calculateWedgePoints expects NM
+                wedge.start, 
+                wedge.end
+            );
+            
+            const wedgePolygon = L.polygon(wedgePoints, {
+                color: wedgeColors[wedge.attr],
+                fillColor: wedgeColors[wedge.attr],
+                fillOpacity: 0.2,
+                weight: 1,
+                className: `storm-attribute r34-wedge ${wedge.attr}`
+            }).addTo(map);
+            
+            wedgePolygon.stormAttribute = wedge.attr;
+            wedgePolygon.pointIndex = pointIndex;
+            stormCircles[pointIndex].push(wedgePolygon);
+            
+            // Make wedges editable in edit mode
+            if (editMode) {
+                makeWedgeEditable(wedgePolygon, pointIndex, wedge.attr, wedge.start, wedge.end);
+            }
+        });
+    }
 }
 
 // Make circle editable with dragging - UPDATE to store meters

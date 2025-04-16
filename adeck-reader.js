@@ -356,6 +356,23 @@ window.AdeckReader = {
     },
 
     /**
+     * Format a human-readable model name, especially for ensemble members
+     * @param {string} modelId - The raw model identifier
+     * @returns {string} Human-readable model name
+     */
+    formatModelName: function(modelId) {
+        // Check for ensemble pattern (PHXX where XX are digits)
+        const ensembleMatch = modelId.match(/^PH(\d{2})$/);
+        if (ensembleMatch) {
+            const ensembleNumber = parseInt(ensembleMatch[1], 10);
+            return `Ensemble No. ${ensembleNumber}`;
+        }
+        
+        // Return original model ID if no special formatting needed
+        return modelId;
+    },
+
+    /**
      * Convert ADECK record to cyclone viewer point format
      */
     convertPointFormat: function(record) {
@@ -391,6 +408,7 @@ window.AdeckReader = {
                 wind_speed: record.wind_speed || null,
                 mslp: record.mslp || null,
                 model: record.model || "UNKNOWN",
+                displayModel: this.formatModelName(record.model || "UNKNOWN"), // Add display name
                 type: record.type || null,
                 latitudeFormatted: record.latitudeFormatted,
                 longitudeFormatted: record.longitudeFormatted,
@@ -460,6 +478,11 @@ window.AdeckReader = {
      * create isDefaultModel with ALL the models
      */
     isDefaultModel: function(model) {
+        // Check for ensemble pattern (PHXX)
+        if (model.match(/^PH\d{2}$/)) {
+            return true; // Include all ensemble members as default models
+        }
+
         // Models to show by default all the models 
         const defaultModels = [
             'OFCL', 'OFCI', 'CARQ',
@@ -845,8 +868,28 @@ window.AdeckReader = {
         // Create category sections - but only for models that are being displayed
         modelCategories.slice(1).forEach(category => {
             // Filter storms by this category, but only including models that are in the available set
-            const categoryModels = category.models.filter(model => availableModels.includes(model));
-            const categoryStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
+            const categoryModels = category.models.filter(model => {
+                // Check direct match
+                if (availableModels.includes(model)) return true;
+                
+                // Check pattern match (for ensembles)
+                if (category.id === 'ensembles' && availableModels.some(m => m.match(/^PH\d{2}$/))) {
+                    return true;
+                }
+                
+                return false;
+            });
+            
+            // Include ensemble models if we're in the ensemble category
+            let categoryStorms = [];
+            if (category.id === 'ensembles') {
+                categoryStorms = filteredStorms.filter(storm => 
+                    categoryModels.includes(storm.model) || 
+                    storm.model.match(/^PH\d{2}$/)
+                );
+            } else {
+                categoryStorms = filteredStorms.filter(storm => categoryModels.includes(storm.model));
+            }
             
             if (categoryStorms.length === 0) return;
             
@@ -912,7 +955,10 @@ window.AdeckReader = {
                 modelWrapper.style.display = 'flex';
                 modelWrapper.style.alignItems = 'center';
                 modelWrapper.appendChild(visibilityBtn);
-                modelWrapper.appendChild(document.createTextNode(storm.model));
+                
+                // Use formatted model name if available
+                const displayModelName = this.formatModelName(storm.model);
+                modelWrapper.appendChild(document.createTextNode(displayModelName));
                 
                 // Apply color indicator
                 const modelColor = this.getModelColor(storm.model);
@@ -979,6 +1025,13 @@ window.AdeckReader = {
                     'CONU', 'GUNA', 'GUNS', 'HCCA',
                     'BAMD', 'BAMM', 'BAMS', 'LBAR', 'XTRP',
                     'CLIP', 'CLP5', 'MRCL'
+                ]
+            },
+            {
+                id: 'ensembles',
+                name: 'Ensemble Members',
+                models: [
+                    // This will catch all PHXX patterns
                 ]
             }
         ];
@@ -1292,7 +1345,7 @@ window.AdeckReader = {
             window.adeckLines = [];
         }
         window.adeckLines.push(trackLine);
-        
+      
         // If this is a forecast track, draw perpendicular line at first point
         if (track.points[0].isFirstPoint && track.points[0].perpLine) {
             const perpLine = this.drawPerpendicularLine(track.points[0], map);
@@ -1706,8 +1759,21 @@ function getModelColor(modelId) {
         return MODEL_COLORS[modelId];
     }
     
+    // Check for ensemble pattern (PHXX where XX are digits)
+    const ensembleMatch = modelId.match(/^PH(\d{2})$/);
+    if (ensembleMatch) {
+        const ensembleNumber = parseInt(ensembleMatch[1], 10);
+        // Generate colors for ensemble members using HSL for even color distribution
+        // Use base hue of 180 (cyan) and vary it based on ensemble number
+        const hue = (180 + ensembleNumber * 15) % 360; 
+        const saturation = 80;
+        const lightness = 55;
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+    
     // If not found, try window.AdeckReader
-    if (window.AdeckReader && typeof window.AdeckReader.getModelColor === 'function') {
+    if (window.AdeckReader && typeof window.AdeckReader.getModelColor === 'function' && 
+        window.AdeckReader.getModelColor !== getModelColor) { // Prevent infinite recursion
         const color = window.AdeckReader.getModelColor(modelId);
         if (color) return color;
     }
@@ -1796,6 +1862,17 @@ window.getModelColor = getModelColor;
 // Update AdeckReader to use the consistent color system if it exists
 if (window.AdeckReader) {
     window.AdeckReader.getModelColor = getModelColor;
+    window.AdeckReader.formatModelName = function(modelId) {
+        // Check for ensemble pattern (PHXX where XX are digits)
+        const ensembleMatch = modelId.match(/^PH(\d{2})$/);
+        if (ensembleMatch) {
+            const ensembleNumber = parseInt(ensembleMatch[1], 10);
+            return `Ensemble No. ${ensembleNumber}`;
+        }
+        
+        // Return original model ID if no special formatting needed
+        return modelId;
+    };
 }
 
 console.log("ADECK/BDECK Reader initialized");

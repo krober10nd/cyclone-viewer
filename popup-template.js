@@ -97,6 +97,15 @@ function formatPopupContent(point, index) {
     const cycloneId = point.cycloneId || '';
     const cycloneName = point.cycloneName || `Cyclone Position #${index}`;
     
+    // Format model name for display if needed (for ensemble members)
+    let modelName = point.model || "";
+    if (modelName.match(/^PH\d{2}$/) && window.AdeckReader && window.AdeckReader.formatModelName) {
+        modelName = window.AdeckReader.formatModelName(modelName);
+    } else if (point.displayModel) {
+        // Use displayModel if already provided
+        modelName = point.displayModel;
+    }
+    
     // Increased max-height from 500px to 625px (25% taller)
     let content = `<div class="popup-content" style="border-color:${category.color}; max-height: 625px;">`;
     
@@ -194,6 +203,15 @@ function formatPopupContent(point, index) {
             <span class="var-value">${formatDistanceUnit(value)}</span>
         </div>`;
     });
+    
+    // Add model name if available
+    if (modelName) {
+        content += `
+        <div class="metric">
+            <strong class="var-name">MODEL:</strong> 
+            <span class="var-value">${modelName}</span>
+        </div>`;
+    }
     
     content += `</div>`;
     

@@ -9,6 +9,11 @@
 
 A simple application for visualizing and editing tropical cyclone tracks with meteorological parameters.
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+
+
 ## Installation
 
 ### Prerequisites

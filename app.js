@@ -1,3 +1,10 @@
+/**
+ * Cyclone Viewer
+ * Copyright (c) 2025 Keith Roberts
+ * 
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 // Use global shp object loaded from CDN instead of import
 // The shpjs library is already included via <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
 

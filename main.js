@@ -1,3 +1,11 @@
+/**
+ * Cyclone Viewer
+ * Copyright (c) 2025 Keith Roberts
+ * 
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // main.js - Electron Main Process
 const { app, BrowserWindow } = require('electron');
 const path = require('path');

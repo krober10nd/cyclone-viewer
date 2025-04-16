@@ -1,4 +1,12 @@
 /**
+ * Cyclone Viewer
+ * Copyright (c) 2025 Keith Roberts
+ * 
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/**
  * ADECK File Reader
  * Parses ADECK/BDECK format (Automated Tropical Cyclone Forecast) files and converts to a format usable by the cyclone viewer
  */
@@ -1511,6 +1519,11 @@ function parseBdeckFile(content) {
           radius_of_34_kt_winds_se_m: r34_se, 
           radius_of_34_kt_winds_sw_m: r34_sw,
           radius_of_34_kt_winds_nw_m: r34_nw,
+          // Add shorthand field names for compatibility with popup template
+          r34_ne: r34_ne,
+          r34_se: r34_se,
+          r34_sw: r34_sw,
+          r34_nw: r34_nw,
           year_utc: year,
           month_utc: month + 1, // Store as 1-indexed for display
           day_utc: day,

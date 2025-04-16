@@ -194,6 +194,22 @@ function formatPopupContent(point, index) {
         // Get value from either short or long format
         let value = point[metric.key];
         
+        // For A-deck data compatibility, also check alternative field names
+        if (value === undefined || value === null) {
+            // Check for alternative field names
+            if (metric.key === 'rmw') {
+                // Already checked primary key above
+            } else if (metric.key === 'r34_ne') {
+                value = point.radius_of_34_kt_winds_ne_m;
+            } else if (metric.key === 'r34_se') {
+                value = point.radius_of_34_kt_winds_se_m;
+            } else if (metric.key === 'r34_sw') {
+                value = point.radius_of_34_kt_winds_sw_m;
+            } else if (metric.key === 'r34_nw') {
+                value = point.radius_of_34_kt_winds_nw_m;
+            }
+        }
+        
         // Skip if still no value
         if (value === undefined || value === null) return;
         

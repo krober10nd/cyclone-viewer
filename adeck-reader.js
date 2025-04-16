@@ -193,7 +193,8 @@ window.AdeckReader = {
             lon: 7,           // LON
             vmax: 8,          // VMAX
             mslp: 9,          // MSLP
-            stormType: 10     // TY (tropical depression, tropical storm, etc.)
+            stormType: 10,    // TY (tropical depression, tropical storm, etc.)
+            rmw: 20          // RMW (Radius of Maximum Wind) - typically in column 20
         };
     },
 
@@ -344,6 +345,14 @@ window.AdeckReader = {
             }
         }
         
+        // Extract RMW (Radius of Maximum Wind) - field #20
+        if (columnMap.rmw !== undefined && parts.length > columnMap.rmw && parts[columnMap.rmw] && parts[columnMap.rmw].trim() !== '') {
+            const rmwValue = parseInt(parts[columnMap.rmw].trim());
+            if (!isNaN(rmwValue) && rmwValue > 0) {
+                record.rmw = rmwValue * 1852; // Convert from nautical miles to meters
+            }
+        }
+        
         if (columnMap.stormType !== undefined && parts[columnMap.stormType]) {
             record.type = parts[columnMap.stormType];
         }
@@ -407,6 +416,7 @@ window.AdeckReader = {
                 init_time: record.initYYYYMMDDHH,
                 wind_speed: record.wind_speed || null,
                 mslp: record.mslp || null,
+                rmw: record.rmw || null,  // Add RMW to point object
                 model: record.model || "UNKNOWN",
                 displayModel: this.formatModelName(record.model || "UNKNOWN"), // Add display name
                 type: record.type || null,

@@ -3044,6 +3044,186 @@ function addCategoryLegend() {
     });
 }
 
+document.addEventListener('keydown', function(e) { 
+    if (e.key === 'Escape' || e.key === 'c') {
+        deselectAll();
+    }
+})
+
+// Set initial mode status text based on editMode value
+const modeStatus = document.getElementById('mode-status');
+if (modeStatus) {
+    modeStatus.textContent = editMode ? 'Edit Cyclone Parameters' : 'Move Cyclone Position';
+    modeStatus.className = editMode ? 'edit-mode' : 'view-mode';
+}
+
+// Make unit system and conversion factors available globally for popup templates
+window.unitSystem = unitSystem;
+window.UNIT_CONVERSIONS = UNIT_CONVERSIONS;
+window.NM_TO_KM = NM_TO_KM;
+
+// Add resize handler
+window.addEventListener('resize', adjustMapSize);
+
+// Save map view functionality
+function saveMapView() {
+    if (!map) return;
+    
+    const mapView = {
+        center: map.getCenter(),
+        zoom: map.getZoom(),
+        timestamp: new Date().toISOString()
+    };
+    
+    localStorage.setItem('cycloneViewer_savedMapView', JSON.stringify(mapView));
+    showNotification('Map view saved successfully', 'success', 2000);
+}
+
+// Load map view functionality
+function loadMapView() {
+    const savedView = localStorage.getItem('cycloneViewer_savedMapView');
+    
+    if (!savedView) {
+        showNotification('No saved map view found', 'warning', 2000);
+        return;
+    }
+    
+    try {
+        const mapView = JSON.parse(savedView);
+        
+        if (mapView.center && mapView.zoom) {
+            map.setView([mapView.center.lat, mapView.center.lng], mapView.zoom, {
+                animate: true,
+                duration: 1.0
+            });
+            
+            // Set fixed view mode if needed
+            window.isViewFixed = true;
+            
+            const viewTime = new Date(mapView.timestamp).toLocaleString();
+            showNotification(`Loaded map view from ${viewTime}`, 'info', 2000);
+        } else {
+            showNotification('Invalid saved map view', 'error', 2000);
+        }
+    } catch (error) {
+        console.error('Error loading saved map view:', error);
+        showNotification('Failed to load saved map view', 'error', 2000);
+    }
+}
+
+// Add event listeners for save/load view buttons
+const saveViewBtn = document.getElementById('save-view-btn');
+const loadViewBtn = document.getElementById('load-view-btn');
+
+if (saveViewBtn) {
+    saveViewBtn.addEventListener('click', saveMapView);
+} else {
+    console.log('Save view button not found, creating it');
+    createViewButtons();
+}
+
+if (loadViewBtn) {
+    loadViewBtn.addEventListener('click', loadMapView);
+} else if (!saveViewBtn) {
+    // If we already created buttons from the saveViewBtn check, don't do it again
+    console.log('Load view button not found, will be created with save button');
+}
+
+// Create map view control buttons if they don't exist
+function createViewButtons() {
+    const mapContainer = document.getElementById('map-container');
+    if (!mapContainer) return;
+    
+    // Create container for the buttons
+    const viewControlsContainer = document.createElement('div');
+    viewControlsContainer.className = 'view-controls leaflet-control';
+    viewControlsContainer.style.position = 'absolute';
+    viewControlsContainer.style.top = '100px';  // Position below other controls
+    viewControlsContainer.style.right = '10px';
+    viewControlsContainer.style.zIndex = '1000';
+    
+    // Create save view button
+    const saveBtn = document.createElement('button');
+    saveBtn.id = 'save-view-btn';
+    saveBtn.className = 'view-control-btn save-view-btn';
+    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save View';
+    saveBtn.title = 'Save current map view';
+    saveBtn.addEventListener('click', saveMapView);
+    
+    // Create load view button
+    const loadBtn = document.createElement('button');
+    loadBtn.id = 'load-view-btn';
+    loadBtn.className = 'view-control-btn load-view-btn';
+    loadBtn.innerHTML = '<i class="fas fa-map-marker"></i> Load View';
+    loadBtn.title = 'Load saved map view';
+    loadBtn.addEventListener('click', loadMapView);
+    
+    // Add buttons to container
+    viewControlsContainer.appendChild(saveBtn);
+    viewControlsContainer.appendChild(loadBtn);
+    
+    // Add container to map
+    mapContainer.appendChild(viewControlsContainer);
+    
+    // Add styles for the buttons
+    const style = document.createElement('style');
+    style.textContent = `
+        .view-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .view-control-btn {
+            background-color: rgba(40, 40, 40, 0.8);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            transition: background-color 0.2s;
+            width: 100px;
+            text-align: center;
+        }
+        .view-control-btn:hover {
+            background-color: rgba(60, 60, 60, 0.9);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        .save-view-btn i:before {
+            content: "💾";
+            font-style: normal;
+        }
+        .load-view-btn i:before {
+            content: "📍";
+            font-style: normal;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// File input direct handling
+const csvFileInput = document.getElementById('csv-file');
+if (csvFileInput) {
+    csvFileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            loadCSVFile(this.files[0]);
+            
+            // Reset the file input so the same file can be selected again if needed
+            // This is useful when users want to reload the same file after making changes
+            setTimeout(() => {
+                this.value = '';
+            }, 1000);
+            
+            // Show notification that file was selected
+            showNotification(`Selected file: ${this.files[0].name}`, 'info', 1500);
+        }
+    });
+}
+
 // Ensure document layout is optimal after loading
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize map

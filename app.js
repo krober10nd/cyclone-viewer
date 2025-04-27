@@ -3518,6 +3518,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Update hurricane legend
             addCategoryLegend();
+
+            // Update shapefile points to reflect new scale 
+            updateShapefilePoints();
             
             // Show feedback to user
             const scaleName = currentScale === 'saffir-simpson' ? 'Saffir-Simpson' : 'Australian BoM';
@@ -3670,6 +3673,9 @@ function toggleUnits() {
     // Update UI elements to reflect new unit system
     updateAllDisplayedUnits();
     
+    // Update shapefile points to use new units
+    updateShapefilePoints();
+    
     // Show feedback to user
     const unitName = unitSystem === 'metric' ? 'Metric' : 'Imperial';
     showNotification(`Switched to ${unitName} units`, 'info', 1500);
@@ -3799,11 +3805,20 @@ function nmToKmForDisplay(valueNM, decimals = 0) {
     }
 }
 
-// Create star icon for shapefile points
-function createStarIcon() {
+// Create star icon for shapefile points with wind-based coloring
+function createStarIcon(windSpeed = null) {
+    // Default color for points without wind data
+    let color = '#FFCC00'; // Default yellow
+    
+    // If we have wind speed, use the current scale to determine color
+    if (windSpeed !== null && !isNaN(windSpeed)) {
+        const category = getHurricaneCategory(windSpeed);
+        color = category.color;
+    }
+    
     return L.divIcon({
         className: 'star-marker',
-        html: '★',
+        html: `<div style="color: ${color};">★</div>`,
         iconSize: [20, 20],
         iconAnchor: [10, 10]
     });
@@ -4114,31 +4129,52 @@ function addPointToMap(coords, properties) {
     } catch (e) {
         console.error("Error adding marker at", [lat, lon], ":", e.message);
     }
+    // Update the tooltip creation part in the addPointToMap function
+    // Inside the addPointToMap function where tooltip is created:
+    if (nameValue) {
+        // Create tooltip content with site name and wind speed (if available)
+        let tooltipContent = nameValue;
+    
+        // Add wind speed below the site name if available with proper unit conversion
+        if (windValue !== null && !isNaN(windValue)) {
+            tooltipContent += `<br><span class="wind-value">${formatWindSpeed(windValue)}</span>`;
+        }
+    
+        marker.bindTooltip(tooltipContent, {
+            permanent: true,
+            direction: 'top',
+            className: 'site-name-label',
+            offset: [0, -10],
+            opacity: 0.9
+        }).openTooltip();
+    }
 }
 
-// Create popup content for shapefile points with enhanced display for name and peak wind
+// Enhanced version of createShapefilePopup
 function createShapefilePopup(properties, nameValue, windKey, windValue) {
     // Create header with name if available
     const headerTitle = nameValue || "Shapefile Point";
-    
+
     let content = `<div class="popup-content">
         <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
             <strong>${headerTitle}</strong>
         </div>`;
-    
+
     // Add wind speed in a special highlighted section if available
     if (windKey && windValue !== null && !isNaN(windValue)) {
-        // Format the wind value using the application's wind formatting
-        const formattedWind = formatWindSpeed ? formatWindSpeed(windValue) : `${windValue} m/s`;
-        
+        // Use formatWindSpeed function which properly handles unit system
+        const formattedWind = typeof formatWindSpeed === 'function' 
+            ? formatWindSpeed(windValue) 
+            : `${windValue} m/s`;
+
         content += `
         <div class="popup-highlight-section" style="background-color:rgba(0, 170, 255, 0.1); padding: 5px; margin-bottom: 8px; border-left: 3px solid #00AAFF;">
             <strong>${windKey}:</strong> ${formattedWind}
         </div>`;
     }
-    
+
     content += `<div class="popup-metrics">`;
-    
+
     // Display all properties in a nicely formatted way, skipping ones we've already highlighted
     for (const [key, value] of Object.entries(properties)) {
         // Skip the properties we've already displayed prominently
@@ -4146,19 +4182,32 @@ function createShapefilePopup(properties, nameValue, windKey, windValue) {
             (nameValue && (key === 'name' || key === 'NAME' || key === 'Name'))) {
             continue;
         }
-        
+
         if (value !== null && value !== undefined) {
             // Format different types of values appropriately
             let displayValue = value;
+            
             if (typeof value === 'number') {
-                // Format numbers with appropriate precision
-                displayValue = formatNumber(value, 
-                    Number.isInteger(value) ? 0 : 2);
+                // Check if this appears to be a distance or speed measurement
+                if (key.toLowerCase().includes('dist') || 
+                    key.toLowerCase().includes('radius') || 
+                    key.toLowerCase().includes('size')) {
+                    // Format as distance with proper units
+                    displayValue = formatDistance(value);
+                } else if (key.toLowerCase().includes('speed') || 
+                          key.toLowerCase().includes('velocity') || 
+                          key.toLowerCase().includes('wind')) {
+                    // Format as wind speed with proper units
+                    displayValue = formatWindSpeed(value);
+                } else {
+                    // Regular number formatting for non-unit values
+                    displayValue = formatNumber(value, Number.isInteger(value) ? 0 : 2);
+                }
             } else if (typeof value === 'string' && value.length > 50) {
                 // Truncate long strings
                 displayValue = value.substring(0, 47) + '...';
             }
-            
+
             content += `
             <div class="metric">
                 <strong class="var-name">${key}:</strong> 
@@ -4166,13 +4215,10 @@ function createShapefilePopup(properties, nameValue, windKey, windValue) {
             </div>`;
         }
     }
-    
+
     content += `</div></div>`;
     return content;
 }
-
-
-
 
 // Read file as array buffer with attribute extraction for binary files
 function readFileAsArrayBuffer(file) {
@@ -4645,6 +4691,77 @@ function clearShapefilePoints() {
     
     // Clear array of references
     shapefilePoints = [];
+}
+
+// Function to update shapefile points when units or scale changes
+function updateShapefilePoints() {
+    if (!shapefilePoints || shapefilePoints.length === 0) return;
+    
+    console.log(`Updating ${shapefilePoints.length} shapefile points to match current units and scale`);
+    
+    shapefilePoints.forEach(marker => {
+        // Update icon based on wind value and current scale
+        if (marker.windValue !== null && !isNaN(marker.windValue)) {
+            // Get the category based on the current scale
+            const category = getHurricaneCategory(marker.windValue);
+            const markerColor = category ? category.color : '#FFCC00'; // Use category color or default to yellow
+            
+            // Create new icon with updated color based on current scale
+            const updatedIcon = L.divIcon({
+                className: 'star-marker',
+                html: `<div style="color:${markerColor}; font-size: 20px; text-align: center; line-height: 20px;">★</div>`,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+            
+            // Update the marker icon
+            marker.setIcon(updatedIcon);
+            
+            // Store the updated category for reference
+            marker.category = category ? category.name : null;
+        }
+        
+        // Force update popup content if it's open
+        if (marker._popup) {
+            // Update popup content with current unit system
+            marker._popup.setContent(
+                createShapefilePopup(marker.options.properties || {}, 
+                                    marker.nameValue, 
+                                    marker.windKey, 
+                                    marker.windValue)
+            );
+            
+            // If popup is open, ensure the content is refreshed
+            if (marker._popup.isOpen()) {
+                marker._popup.update();
+            }
+        }
+        
+        // Update tooltips to reflect new units
+        if (marker.getTooltip()) {
+            let tooltipContent = marker.nameValue || "Shapefile Point";
+            
+            // Add wind speed below the site name if available with proper unit conversion
+            if (marker.windValue !== null && !isNaN(marker.windValue)) {
+                tooltipContent += `<br><span class="wind-value">${formatWindSpeed(marker.windValue)}</span>`;
+            }
+            
+            marker.setTooltipContent(tooltipContent);
+        }
+        
+        // Ensure all markers have their popup content recreated when opened next time
+        marker.off('click');
+        marker.on('click', function() {
+            if (!marker._popup) {
+                marker.bindPopup(createShapefilePopup(
+                    marker.options.properties || {}, 
+                    marker.nameValue, 
+                    marker.windKey, 
+                    marker.windValue
+                ));
+            }
+        });
+    });
 }
 
 // Update loading count indicator
@@ -7663,28 +7780,65 @@ function displayShapefilePoints(geojson) {
     }
 }
 
-// Create popup content for shapefile points
-function createShapefilePopup(properties) {
+// Enhanced version of createShapefilePopup to ensure wind speeds are properly formatted
+function createShapefilePopup(properties, nameValue, windKey, windValue) {
+    // Create header with name if available
+    const headerTitle = nameValue || "Shapefile Point";
+
     let content = `<div class="popup-content">
         <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
-            <strong>Shapefile Point</strong>
-        </div>
-        <div class="popup-metrics">`;
-    
-    // Display all properties in a nicely formatted way
+            <strong>${headerTitle}</strong>
+        </div>`;
+
+    // Add wind speed in a special highlighted section if available
+    if (windKey && windValue !== null && !isNaN(windValue)) {
+        // Ensure we use formatWindSpeed for proper unit conversion
+        const formattedWind = formatWindSpeed(windValue);
+
+        content += `
+        <div class="popup-highlight-section" style="background-color:rgba(0, 170, 255, 0.1); padding: 5px; margin-bottom: 8px; border-left: 3px solid #00AAFF;">
+            <strong>${windKey}:</strong> ${formattedWind}
+        </div>`;
+    }
+
+    content += `<div class="popup-metrics">`;
+
+    // Display all properties in a nicely formatted way, skipping ones we've already highlighted
     for (const [key, value] of Object.entries(properties)) {
+        // Skip the properties we've already displayed prominently
+        if ((key === windKey) || 
+            (nameValue && (key === 'name' || key === 'NAME' || key === 'Name'))) {
+            continue;
+        }
+
         if (value !== null && value !== undefined) {
             // Format different types of values appropriately
             let displayValue = value;
+            
             if (typeof value === 'number') {
-                // Format numbers with appropriate precision
-                displayValue = formatNumber(value, 
-                    Number.isInteger(value) ? 0 : 2);
+                // Check if this appears to be a wind speed measurement
+                if (key.toLowerCase().includes('wind') || 
+                    key.toLowerCase().includes('speed') || 
+                    key.toLowerCase().includes('velocity') || 
+                    key.toLowerCase().includes('peak')) {
+                    // Format as wind speed with proper units
+                    displayValue = formatWindSpeed(value);
+                } 
+                // Check if this appears to be a distance measurement
+                else if (key.toLowerCase().includes('dist') || 
+                    key.toLowerCase().includes('radius') || 
+                    key.toLowerCase().includes('size')) {
+                    // Format as distance with proper units
+                    displayValue = formatDistance(value);
+                } else {
+                    // Regular number formatting for non-unit values
+                    displayValue = formatNumber(value, Number.isInteger(value) ? 0 : 2);
+                }
             } else if (typeof value === 'string' && value.length > 50) {
                 // Truncate long strings
                 displayValue = value.substring(0, 47) + '...';
             }
-            
+
             content += `
             <div class="metric">
                 <strong class="var-name">${key}:</strong> 
@@ -7692,7 +7846,7 @@ function createShapefilePopup(properties) {
             </div>`;
         }
     }
-    
+
     content += `</div></div>`;
     return content;
 }

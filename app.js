@@ -3847,15 +3847,237 @@ function readFileAsArrayBuffer(file) {
     });
 }
 
-// Read file as text (for projection files)
-function readFileAsText(file) {
+// Helper function to add a point to the map with coordinate validation
+function addPointToMap(coords, properties) {
+    // Sanity check the coordinates
+    if (!coords || !Array.isArray(coords) || coords.length < 2) {
+        console.log("Invalid coordinates:", coords);
+        return;
+    }
+    
+    // Check which coordinate is likely latitude vs longitude
+    let lat, lon;
+    
+    // Standard GeoJSON is [longitude, latitude], but some files might be [latitude, longitude]
+    if (coords[0] >= -180 && coords[0] <= 180 && coords[1] >= -90 && coords[1] <= 90) {
+        // Likely [longitude, latitude] format (GeoJSON standard)
+        lon = coords[0];
+        lat = coords[1];
+    } else if (coords[1] >= -180 && coords[1] <= 180 && coords[0] >= -90 && coords[0] <= 90) {
+        // Likely [latitude, longitude] format (non-standard)
+        lat = coords[0];
+        lon = coords[1];
+    } else {
+        // If still not clear, assume GeoJSON standard [longitude, latitude]
+        lon = coords[0];
+        lat = coords[1];
+        
+        // Log this case to help debug
+        console.log("Unusual coordinates:", coords, "- assuming [lon, lat]");
+    }
+    
+    // Extra check for valid latitude/longitude (reject extreme values)
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+        console.log("Coordinates out of range - skipping:", coords);
+        return;
+    }
+    
+    try {
+        // Extract important properties for marker
+        const nameValue = properties.name || properties.NAME || properties.Name || null;
+        const windKey = Object.keys(properties).find(key => key.toLowerCase().includes('peak_wind')) || null;
+        const windValue = windKey ? parseFloat(properties[windKey]) : null;
+        
+        // Create marker with star icon
+        const marker = L.marker([lat, lon], {
+            icon: starIcon,
+            title: nameValue || getPointTitle(properties)
+        });
+        
+        // Store important properties directly on the marker for reference
+        marker.nameValue = nameValue;
+        marker.windKey = windKey;
+        marker.windValue = windValue;
+        
+        // Add popup with properties
+        if (properties) {
+            marker.bindPopup(createShapefilePopup(properties, nameValue, windKey, windValue), {
+                className: 'shapefile-popup',
+                maxWidth: 300
+            });
+        }
+        
+        // Add to layer group
+        marker.addTo(shapefileLayerGroup);
+        
+        // Store reference
+        shapefilePoints.push(marker);
+    } catch (e) {
+        console.error("Error adding marker at", [lat, lon], ":", e.message);
+    }
+}
+
+// Create popup content for shapefile points with enhanced display for name and peak wind
+function createShapefilePopup(properties, nameValue, windKey, windValue) {
+    // Create header with name if available
+    const headerTitle = nameValue || "Shapefile Point";
+    
+    let content = `<div class="popup-content">
+        <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
+            <strong>${headerTitle}</strong>
+        </div>`;
+    
+    // Add wind speed in a special highlighted section if available
+    if (windKey && windValue !== null && !isNaN(windValue)) {
+        // Format the wind value using the application's wind formatting
+        const formattedWind = formatWindSpeed ? formatWindSpeed(windValue) : `${windValue} m/s`;
+        
+        content += `
+        <div class="popup-highlight-section" style="background-color:rgba(0, 170, 255, 0.1); padding: 5px; margin-bottom: 8px; border-left: 3px solid #00AAFF;">
+            <strong>${windKey}:</strong> ${formattedWind}
+        </div>`;
+    }
+    
+    content += `<div class="popup-metrics">`;
+    
+    // Display all properties in a nicely formatted way, skipping ones we've already highlighted
+    for (const [key, value] of Object.entries(properties)) {
+        // Skip the properties we've already displayed prominently
+        if ((key === windKey) || 
+            (nameValue && (key === 'name' || key === 'NAME' || key === 'Name'))) {
+            continue;
+        }
+        
+        if (value !== null && value !== undefined) {
+            // Format different types of values appropriately
+            let displayValue = value;
+            if (typeof value === 'number') {
+                // Format numbers with appropriate precision
+                displayValue = formatNumber(value, 
+                    Number.isInteger(value) ? 0 : 2);
+            } else if (typeof value === 'string' && value.length > 50) {
+                // Truncate long strings
+                displayValue = value.substring(0, 47) + '...';
+            }
+            
+            content += `
+            <div class="metric">
+                <strong class="var-name">${key}:</strong> 
+                <span class="var-value">${displayValue}</span>
+            </div>`;
+        }
+    }
+    
+    content += `</div></div>`;
+    return content;
+}
+
+
+
+
+// Read file as array buffer with attribute extraction for binary files
+function readFileAsArrayBuffer(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = e => resolve(e.target.result);
         reader.onerror = () => reject(new Error("Failed to read file"));
-        reader.readAsText(file);
+        reader.readAsArrayBuffer(file);
     });
 }
+
+// DBF attribute handling for shapefile processing
+async function processDBFAttributes(dbfBuffer, geojson) {
+    try {
+        // Parse the DBF file
+        const dbfData = await shp.parseDbf(dbfBuffer);
+        
+        console.log("DBF data structure:", 
+            dbfData && typeof dbfData === 'object' ? Object.keys(dbfData) : 'unexpected format');
+        
+        // Look specifically for peak_wind and name attributes
+        let hasPeakWind = false;
+        let hasName = false;
+        
+        // Check what attribute fields are available
+        if (dbfData && dbfData.fields) {
+            console.log("Available DBF fields:", dbfData.fields.map(f => f.name));
+            
+            // Check for peak wind attribute (case insensitive)
+            hasPeakWind = dbfData.fields.some(field => 
+                field.name && field.name.toLowerCase().includes('peak_wind'));
+            
+            // Check for name attribute (case insensitive)
+            hasName = dbfData.fields.some(field => 
+                field.name && ['name', 'NAME', 'Name'].includes(field.name));
+            
+            console.log(`Found special attributes - peak_wind: ${hasPeakWind}, name: ${hasName}`);
+        }
+        
+        // Merge attribute data with geometry
+        if (geojson.features && dbfData.features) {
+            // Standard case: both are feature collections
+            console.log("Merging DBF attributes with GeoJSON features");
+            geojson.features.forEach((feature, i) => {
+                if (i < dbfData.features.length) {
+                    feature.properties = dbfData.features[i].properties;
+                    
+                    // Log if we found our specific attributes of interest
+                    if (hasPeakWind || hasName) {
+                        let attrs = [];
+                        if (feature.properties) {
+                            Object.keys(feature.properties).forEach(key => {
+                                if (key.toLowerCase().includes('peak_wind') || 
+                                    ['name', 'NAME', 'Name'].includes(key)) {
+                                    attrs.push(`${key}: ${feature.properties[key]}`);
+                                }
+                            });
+                        }
+                        if (attrs.length > 0) {
+                            console.log(`Feature ${i} has attributes of interest:`, attrs.join(', '));
+                        }
+                    }
+                }
+            });
+        } else if (dbfData && Array.isArray(geojson)) {
+            // Special case: DBF has different structure than GeoJSON
+            console.log("Special case: SHP is array but DBF has different structure");
+            
+            // Handle different possible DBF data structures
+            if (dbfData.records && Array.isArray(dbfData.records)) {
+                console.log("Processing DBF records array");
+                geojson.forEach((feature, i) => {
+                    if (i < dbfData.records.length) {
+                        if (!feature.properties) feature.properties = {};
+                        Object.assign(feature.properties, dbfData.records[i]);
+                    }
+                });
+            } else if (dbfData.data && Array.isArray(dbfData.data)) {
+                console.log("Processing DBF data array");
+                geojson.forEach((feature, i) => {
+                    if (i < dbfData.data.length) {
+                        if (!feature.properties) feature.properties = {};
+                        Object.assign(feature.properties, dbfData.data[i]);
+                    }
+                });
+            }
+        }
+        
+        return geojson;
+    } catch (error) {
+        console.error("Error processing DBF attributes:", error);
+        return geojson; // Return original geojson if we encounter errors
+    }
+}
+
+// // Read file as text (for projection files)
+// function readFileAsText(file) {
+//     return new Promise((resolve, reject) => {
+//         const reader = new FileReader();
+//         reader.onload = e => resolve(e.target.result);
+//         reader.onerror = () => reject(new Error("Failed to read file"));
+//         reader.readAsText(file);
+//     });
+// }
 
 // Display shapefile points on the map - improved version
 function displayShapefilePoints(geojson) {
@@ -3868,6 +4090,7 @@ function displayShapefilePoints(geojson) {
     }
     
     // Create star icon once to reuse
+    // color startIcon based on feature properties
     const starIcon = createStarIcon();
     
     // Count of points added
@@ -3932,67 +4155,130 @@ function displayShapefilePoints(geojson) {
             }
         });
     }
-    
     // Helper function to add a point to the map with coordinate validation
-    function addPointToMap(coords, properties) {
-        // Sanity check the coordinates
-        if (!coords || !Array.isArray(coords) || coords.length < 2) {
-            console.log("Invalid coordinates:", coords);
-            return;
-        }
-        
-        // Check which coordinate is likely latitude vs longitude
-        let lat, lon;
-        
-        // Standard GeoJSON is [longitude, latitude], but some files might be [latitude, longitude]
-        if (coords[0] >= -180 && coords[0] <= 180 && coords[1] >= -90 && coords[1] <= 90) {
-            // Likely [longitude, latitude] format (GeoJSON standard)
-            lon = coords[0];
-            lat = coords[1];
-        } else if (coords[1] >= -180 && coords[1] <= 180 && coords[0] >= -90 && coords[0] <= 90) {
-            // Likely [latitude, longitude] format (non-standard)
-            lat = coords[0];
-            lon = coords[1];
-        } else {
-            // If still not clear, assume GeoJSON standard [longitude, latitude]
-            lon = coords[0];
-            lat = coords[1];
-            
-            // Log this case to help debug
-            console.log("Unusual coordinates:", coords, "- assuming [lon, lat]");
-        }
-        
-        // Extra check for valid latitude/longitude (reject extreme values)
-        if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-            console.log("Coordinates out of range - skipping:", coords);
-            return;
-        }
-        
-        try {
-            // Create marker with star icon
-            const marker = L.marker([lat, lon], {
-                icon: starIcon,
-                title: getPointTitle(properties)
-            });
-            
-            // Add popup with properties
-            if (properties) {
-                marker.bindPopup(createShapefilePopup(properties), {
-                    className: 'shapefile-popup',
-                    maxWidth: 300
-                });
-            }
-            
-            // Add to layer group
-            marker.addTo(shapefileLayerGroup);
-            
-            // Store reference
-            shapefilePoints.push(marker);
-        } catch (e) {
-            console.error("Error adding marker at", [lat, lon], ":", e.message);
-        }
+function addPointToMap(coords, properties) {
+    // Sanity check the coordinates
+    if (!coords || !Array.isArray(coords) || coords.length < 2) {
+        console.log("Invalid coordinates:", coords);
+        return;
     }
     
+    // Check which coordinate is likely latitude vs longitude
+    let lat, lon;
+    
+    // Standard GeoJSON is [longitude, latitude], but some files might be [latitude, longitude]
+    if (coords[0] >= -180 && coords[0] <= 180 && coords[1] >= -90 && coords[1] <= 90) {
+        // Likely [longitude, latitude] format (GeoJSON standard)
+        lon = coords[0];
+        lat = coords[1];
+    } else if (coords[1] >= -180 && coords[1] <= 180 && coords[0] >= -90 && coords[0] <= 90) {
+        // Likely [latitude, longitude] format (non-standard)
+        lat = coords[0];
+        lon = coords[1];
+    } else {
+        // If still not clear, assume GeoJSON standard [longitude, latitude]
+        lon = coords[0];
+        lat = coords[1];
+        
+        // Log this case to help debug
+        console.log("Unusual coordinates:", coords, "- assuming [lon, lat]");
+    }
+    
+    // Extra check for valid latitude/longitude (reject extreme values)
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+        console.log("Coordinates out of range - skipping:", coords);
+        return;
+    }
+    
+    try {
+        // Extract important properties for marker
+        const nameValue = properties.name || properties.NAME || properties.Name || null;
+        const windKey = Object.keys(properties).find(key => key.toLowerCase().includes('peak_wind')) || null;
+        const windValue = windKey ? parseFloat(properties[windKey]) : null;
+        
+        // Create marker with star icon
+        const marker = L.marker([lat, lon], {
+            icon: starIcon,
+            title: nameValue || getPointTitle(properties)
+        });
+        
+        // Store important properties directly on the marker for reference
+        marker.nameValue = nameValue;
+        marker.windKey = windKey;
+        marker.windValue = windValue;
+        
+        // Add popup with properties
+        if (properties) {
+            marker.bindPopup(createShapefilePopup(properties, nameValue, windKey, windValue), {
+                className: 'shapefile-popup',
+                maxWidth: 300
+            });
+        }
+        
+        // Add to layer group
+        marker.addTo(shapefileLayerGroup);
+        
+        // Store reference
+        shapefilePoints.push(marker);
+    } catch (e) {
+        console.error("Error adding marker at", [lat, lon], ":", e.message);
+    }
+}
+
+    // Create popup content for shapefile points with enhanced display for name and peak wind
+    function createShapefilePopup(properties, nameValue, windKey, windValue) {
+        // Create header with name if available
+        const headerTitle = nameValue || "Shapefile Point";
+
+        let content = `<div class="popup-content">
+            <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
+                <strong>${headerTitle}</strong>
+            </div>`;
+
+        // Add wind speed in a special highlighted section if available
+        if (windKey && windValue !== null && !isNaN(windValue)) {
+            // Format the wind value using the application's wind formatting
+            const formattedWind = formatWindSpeed ? formatWindSpeed(windValue) : `${windValue} m/s`;
+
+            content += `
+            <div class="popup-highlight-section" style="background-color:rgba(0, 170, 255, 0.1); padding: 5px; margin-bottom: 8px; border-left: 3px solid #00AAFF;">
+                <strong>${windKey}:</strong> ${formattedWind}
+            </div>`;
+        }
+
+        content += `<div class="popup-metrics">`;
+
+        // Display all properties in a nicely formatted way, skipping ones we've already highlighted
+        for (const [key, value] of Object.entries(properties)) {
+            // Skip the properties we've already displayed prominently
+            if ((key === windKey) || 
+                (nameValue && (key === 'name' || key === 'NAME' || key === 'Name'))) {
+                continue;
+            }
+
+            if (value !== null && value !== undefined) {
+                // Format different types of values appropriately
+                let displayValue = value;
+                if (typeof value === 'number') {
+                    // Format numbers with appropriate precision
+                    displayValue = formatNumber(value, 
+                        Number.isInteger(value) ? 0 : 2);
+                } else if (typeof value === 'string' && value.length > 50) {
+                    // Truncate long strings
+                    displayValue = value.substring(0, 47) + '...';
+                }
+
+                content += `
+                <div class="metric">
+                    <strong class="var-name">${key}:</strong> 
+                    <span class="var-value">${displayValue}</span>
+                </div>`;
+            }
+        }
+
+        content += `</div></div>`;
+        return content;
+    }
     // Get a title for the point from properties
     function getPointTitle(properties) {
         if (!properties) return "Shapefile Point";
@@ -5793,6 +6079,19 @@ function deselectAll() {
 document.addEventListener('DOMContentLoaded', function() {
     // ...existing code...
     
+    // New helper function to generate a popup for a shapefile point marker.
+    function generateShapefilePopupContent(marker) {
+        const windCol = marker.windKey || "Unknown Wind Column";
+        const windVal = marker.windValue;
+        const formattedWind = (windVal && !isNaN(windVal)) ? formatWindSpeed(windVal) : "N/A";
+        return `<div class="popup-content">
+                    <strong>${marker.nameValue || "Shapefile Point"}</strong><br>
+                    Wind (${windCol}): ${formattedWind}
+                </div>`;
+    }
+    
+    // ...existing code...
+    
     // Add event handler for deselect-all button
     const deselectAllBtn = document.getElementById('deselect-all');
     if (deselectAllBtn) {
@@ -6466,6 +6765,7 @@ function createStarIcon() {
     });
 }
 
+
 // Load and process shapefile - Updated with improved format handling
 async function loadShapefile(files) {
     try {
@@ -6496,6 +6796,20 @@ async function loadShapefile(files) {
             
             if (fileName.endsWith('.shp')) {
                 shpFile = file;
+                // Look for matching .dbf and .prj files by name
+                const baseName = fileName.slice(0, -4); // Remove .shp extension
+                
+                // Look for the corresponding DBF file
+                if (!dbfFile) {
+                    dbfFile = Array.from(files).find(f => 
+                        f.name.toLowerCase() === baseName + '.dbf');
+                }
+                
+                // Look for the corresponding PRJ file
+                if (!prjFile) {
+                    prjFile = Array.from(files).find(f => 
+                        f.name.toLowerCase() === baseName + '.prj');
+                }
             } else if (fileName.endsWith('.dbf')) {
                 dbfFile = file;
             } else if (fileName.endsWith('.prj')) {
@@ -6526,8 +6840,6 @@ async function loadShapefile(files) {
         } 
         else if (kmlFile) {
             // For KML files - convert to GeoJSON using a simple approach
-            // Note: This is a simplified KML parser that works for basic point data
-            // For complex KML, a proper library would be better
             console.log("Processing KML file:", kmlFile.name);
             const kmlText = await readFileAsText(kmlFile);
             geojson = kmlToGeoJSON(kmlText);
@@ -6537,43 +6849,32 @@ async function loadShapefile(files) {
             console.log("Processing ZIP file:", zipFile.name);
             const zipBuffer = await readFileAsArrayBuffer(zipFile);
             geojson = await shp.parseZip(zipBuffer);
+            
+            // For zip files, the DBF data might already be incorporated
+            // Check for peak_wind and name attributes
+            console.log("Checking attributes in ZIP file contents...");
+            scanGeoJSONForAttributes(geojson);
         } 
         else if (shpFile) {
-            // Handle individual shp file, optionally with dbf
+            // Handle individual shp file
             console.log("Processing SHP file:", shpFile.name);
             const shpBuffer = await readFileAsArrayBuffer(shpFile);
             geojson = await shp.parseShp(shpBuffer);
             
-            // If we have a DBF file, add attributes to the features
+            // If we have a DBF file, process attributes with our enhanced function
             if (dbfFile) {
                 console.log("Processing DBF file:", dbfFile.name);
                 const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
-                const dbfData = await shp.parseDbf(dbfBuffer);
-                
-                console.log("DBF data structure:", 
-                    dbfData && typeof dbfData === 'object' ? Object.keys(dbfData) : 'unexpected format');
-                
-                // Attempt to merge DBF attributes with SHP geometry
-                if (geojson.features && dbfData.features) {
-                    // Standard case
-                    geojson.features.forEach((feature, i) => {
-                        if (i < dbfData.features.length) {
-                            feature.properties = dbfData.features[i].properties;
+                geojson = await processDBFAttributes(dbfBuffer, geojson);
+            } else {
+                console.log("No DBF file found - continuing with geometry only");
+                // Initialize empty properties if needed
+                if (geojson.features) {
+                    geojson.features.forEach(feature => {
+                        if (!feature.properties) {
+                            feature.properties = {};
                         }
                     });
-                } else if (dbfData && Array.isArray(geojson)) {
-                    // Special case: SHP is array but DBF has different structure
-                    console.log("Special case: SHP is array but DBF has different structure");
-                    
-                    // If DBF has records directly
-                    if (dbfData.records && Array.isArray(dbfData.records)) {
-                        geojson.forEach((feature, i) => {
-                            if (i < dbfData.records.length) {
-                                if (!feature.properties) feature.properties = {};
-                                Object.assign(feature.properties, dbfData.records[i]);
-                            }
-                        });
-                    }
                 }
             }
             
@@ -6587,13 +6888,69 @@ async function loadShapefile(files) {
             throw new Error("No compatible spatial files found. Please upload a shapefile (.shp, .zip), GeoJSON (.geojson, .json), or KML (.kml) file.");
         }
         
-        // Debug the output structure
+        // Add helper function to scan GeoJSON for attributes of interest
+        function scanGeoJSONForAttributes(geojson) {
+            try {
+                let foundPeakWind = false;
+                let foundName = false;
+                let peakWindKeys = [];
+                
+                // Function to scan properties recursively
+                function scanProperties(properties) {
+                    if (!properties) return;
+                    
+                    Object.keys(properties).forEach(key => {
+                        // Check for peak_wind attribute (case insensitive)
+                        if (key.toLowerCase().includes('peak_wind')) {
+                            foundPeakWind = true;
+                            if (!peakWindKeys.includes(key)) {
+                                peakWindKeys.push(key);
+                            }
+                        }
+                        
+                        // Check for name attribute
+                        if (['name', 'NAME', 'Name'].includes(key)) {
+                            foundName = true;
+                        }
+                    });
+                }
+                
+                // Scan feature collection
+                if (geojson && geojson.features && Array.isArray(geojson.features)) {
+                    geojson.features.forEach(feature => {
+                        if (feature && feature.properties) {
+                            scanProperties(feature.properties);
+                        }
+                    });
+                }
+                // Scan array of features
+                else if (geojson && Array.isArray(geojson)) {
+                    geojson.forEach(item => {
+                        if (item && item.properties) {
+                            scanProperties(item.properties);
+                        }
+                    });
+                }
+                
+                console.log(`Attribute scan results - Found peak_wind: ${foundPeakWind}, Found name: ${foundName}`);
+                if (peakWindKeys.length > 0) {
+                    console.log(`Peak wind attribute keys found: ${peakWindKeys.join(', ')}`);
+                }
+                
+            } catch (error) {
+                console.error("Error scanning GeoJSON attributes:", error);
+            }
+        }
+        
+        // Debug the output structure and scan for attributes
         if (geojson) {
             console.log("GeoJSON structure type:", typeof geojson);
             if (Array.isArray(geojson)) {
                 console.log("GeoJSON is an array with", geojson.length, "items");
+                scanGeoJSONForAttributes(geojson);
             } else if (typeof geojson === 'object') {
                 console.log("GeoJSON object keys:", Object.keys(geojson));
+                scanGeoJSONForAttributes(geojson);
             }
         } else {
             throw new Error("Failed to parse spatial data - no valid GeoJSON structure created");
@@ -6616,6 +6973,358 @@ async function loadShapefile(files) {
         }
     }
 }
+
+
+
+//// Load and process shapefile - Updated with improved attribute handling
+//async function loadShapefile(files) {
+//    try {
+//        // Show loading indicator
+//        const uploadElement = document.querySelector('.shapefile-upload');
+//        uploadElement.classList.add('loading');
+//        
+//        // Reset counter if no count indicator exists
+//        if (!document.querySelector('.loading-count')) {
+//            shapefileCount = 0;
+//        }
+//        
+//        // Show loading notification
+//        showNotification('Processing spatial data...', 'info');
+//        
+//        // Find files by extension
+//        let shpFile = null;
+//        let dbfFile = null;
+//        let prjFile = null;
+//        let zipFile = null;
+//        let geoJsonFile = null;
+//        let kmlFile = null;
+//        
+//        // Check for various file types
+//        for (const file of files) {
+//            const fileName = file.name.toLowerCase();
+//            console.log("Processing file:", fileName);
+//            
+//            if (fileName.endsWith('.shp')) {
+//                shpFile = file;
+//                // Look for matching .dbf and .prj files by name
+//                const baseName = fileName.slice(0, -4); // Remove .shp extension
+//                
+//                // Look for the corresponding DBF file
+//                if (!dbfFile) {
+//                    dbfFile = Array.from(files).find(f => 
+//                        f.name.toLowerCase() === baseName + '.dbf');
+//                }
+//                
+//                // Look for the corresponding PRJ file
+//                if (!prjFile) {
+//                    prjFile = Array.from(files).find(f => 
+//                        f.name.toLowerCase() === baseName + '.prj');
+//                }
+//            } else if (fileName.endsWith('.dbf')) {
+//                dbfFile = file;
+//            } else if (fileName.endsWith('.prj')) {
+//                prjFile = file;
+//            } else if (fileName.endsWith('.zip')) {
+//                zipFile = file;
+//            } else if (fileName.endsWith('.geojson') || fileName.endsWith('.json')) {
+//                geoJsonFile = file;
+//            } else if (fileName.endsWith('.kml')) {
+//                kmlFile = file;
+//            }
+//        }
+//        
+//        let geojson = null;
+//        
+//        // Process based on available file types
+//        if (geoJsonFile) {
+//            // Handle GeoJSON directly
+//            console.log("Processing GeoJSON file:", geoJsonFile.name);
+//            const jsonText = await readFileAsText(geoJsonFile);
+//            try {
+//                geojson = JSON.parse(jsonText);
+//                console.log("Successfully parsed GeoJSON");
+//            } catch (e) {
+//                console.error("Error parsing GeoJSON:", e);
+//                throw new Error("Invalid GeoJSON file format");
+//            }
+//        } 
+//        else if (kmlFile) {
+//            // For KML files - convert to GeoJSON using a simple approach
+//            console.log("Processing KML file:", kmlFile.name);
+//            const kmlText = await readFileAsText(kmlFile);
+//            geojson = kmlToGeoJSON(kmlText);
+//        }
+//        else if (zipFile) {
+//            // Handle zip file containing shapefile
+//            console.log("Processing ZIP file:", zipFile.name);
+//            const zipBuffer = await readFileAsArrayBuffer(zipFile);
+//            geojson = await shp.parseZip(zipBuffer);
+//            
+//            // For zip files, the DBF data might already be incorporated
+//            // Check for peak_wind and name attributes
+//            console.log("Checking attributes in ZIP file contents...");
+//            scanGeoJSONForAttributes(geojson);
+//        } 
+//        else if (shpFile) {
+//            // Handle individual shp file
+//            console.log("Processing SHP file:", shpFile.name);
+//            const shpBuffer = await readFileAsArrayBuffer(shpFile);
+//            geojson = await shp.parseShp(shpBuffer);
+//            
+//            // If we have a DBF file, process attributes with our enhanced function
+//            if (dbfFile) {
+//                console.log("Processing DBF file:", dbfFile.name);
+//                const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
+//                geojson = await processDBFAttributes(dbfBuffer, geojson);
+//            }
+//            
+//            // If we have a PRJ file, we could use it for reprojection
+//            if (prjFile) {
+//                // Just read and log for now - projection is usually handled by Leaflet
+//                const prjText = await readFileAsText(prjFile);
+//                console.log("Projection information detected");
+//            }
+//        } else {
+//            throw new Error("No compatible spatial files found. Please upload a shapefile (.shp, .zip), GeoJSON (.geojson, .json), or KML (.kml) file.");
+//        }
+//        
+//        // Add helper function to scan GeoJSON for attributes of interest
+//        function scanGeoJSONForAttributes(geojson) {
+//            try {
+//                let foundPeakWind = false;
+//                let foundName = false;
+//                let peakWindKeys = [];
+//                
+//                // Function to scan properties recursively
+//                function scanProperties(properties) {
+//                    if (!properties) return;
+//                    
+//                    Object.keys(properties).forEach(key => {
+//                        // Check for peak_wind attribute (case insensitive)
+//                        if (key.toLowerCase().includes('peak_wind')) {
+//                            foundPeakWind = true;
+//                            if (!peakWindKeys.includes(key)) {
+//                                peakWindKeys.push(key);
+//                            }
+//                        }
+//                        
+//                        // Check for name attribute
+//                        if (['name', 'NAME', 'Name'].includes(key)) {
+//                            foundName = true;
+//                        }
+//                    });
+//                }
+//                
+//                // Scan feature collection
+//                if (geojson.features && Array.isArray(geojson.features)) {
+//                    geojson.features.forEach(feature => {
+//                        if (feature && feature.properties) {
+//                            scanProperties(feature.properties);
+//                        }
+//                    });
+//                }
+//                // Scan array of features
+//                else if (Array.isArray(geojson)) {
+//                    geojson.forEach(item => {
+//                        if (item && item.properties) {
+//                            scanProperties(item.properties);
+//                        }
+//                    });
+//                }
+//                
+//                console.log(`Attribute scan results - Found peak_wind: ${foundPeakWind}, Found name: ${foundName}`);
+//                if (peakWindKeys.length > 0) {
+//                    console.log(`Peak wind attribute keys found: ${peakWindKeys.join(', ')}`);
+//                }
+//                
+//            } catch (error) {
+//                console.error("Error scanning GeoJSON attributes:", error);
+//            }
+//        }
+//        
+//        // Debug the output structure and scan for attributes
+//        if (geojson) {
+//            console.log("GeoJSON structure type:", typeof geojson);
+//            if (Array.isArray(geojson)) {
+//                console.log("GeoJSON is an array with", geojson.length, "items");
+//                scanGeoJSONForAttributes(geojson);
+//            } else if (typeof geojson === 'object') {
+//                console.log("GeoJSON object keys:", Object.keys(geojson));
+//                scanGeoJSONForAttributes(geojson);
+//            }
+//        } else {
+//            throw new Error("Failed to parse spatial data - no valid GeoJSON structure created");
+//        }
+//        
+//        // Process and display the GeoJSON
+//        displayShapefilePoints(geojson);
+//        
+//    } catch (error) {
+//        console.error("Error processing spatial data:", error);
+//        showNotification(`Error: ${error.message}`, 'error');
+//    } finally {
+//        // Hide loading indicator
+//        document.querySelector('.shapefile-upload').classList.remove('loading');
+//        
+//        // Remove loading count if it exists
+//        const countElement = document.querySelector('.loading-count');
+//        if (countElement) {
+//            countElement.remove();
+//        }
+//    }
+//}
+
+
+// Load and process shapefile - Updated with improved format handling
+//async function loadShapefile(files) {
+//    try {
+//        // Show loading indicator
+//        const uploadElement = document.querySelector('.shapefile-upload');
+//        uploadElement.classList.add('loading');
+//        
+//        // Reset counter if no count indicator exists
+//        if (!document.querySelector('.loading-count')) {
+//            shapefileCount = 0;
+//        }
+//        
+//        // Show loading notification
+//        showNotification('Processing spatial data...', 'info');
+//        
+//        // Find files by extension
+//        let shpFile = null;
+//        let dbfFile = null;
+//        let prjFile = null;
+//        let zipFile = null;
+//        let geoJsonFile = null;
+//        let kmlFile = null;
+//        
+//        // Check for various file types
+//        for (const file of files) {
+//            const fileName = file.name.toLowerCase();
+//            console.log("Processing file:", fileName);
+//            
+//            if (fileName.endsWith('.shp')) {
+//                shpFile = file;
+//            } else if (fileName.endsWith('.dbf')) {
+//                dbfFile = file;
+//            } else if (fileName.endsWith('.prj')) {
+//                prjFile = file;
+//            } else if (fileName.endsWith('.zip')) {
+//                zipFile = file;
+//            } else if (fileName.endsWith('.geojson') || fileName.endsWith('.json')) {
+//                geoJsonFile = file;
+//            } else if (fileName.endsWith('.kml')) {
+//                kmlFile = file;
+//            }
+//        }
+//        
+//        let geojson = null;
+//        
+//        // Process based on available file types
+//        if (geoJsonFile) {
+//            // Handle GeoJSON directly
+//            console.log("Processing GeoJSON file:", geoJsonFile.name);
+//            const jsonText = await readFileAsText(geoJsonFile);
+//            try {
+//                geojson = JSON.parse(jsonText);
+//                console.log("Successfully parsed GeoJSON");
+//            } catch (e) {
+//                console.error("Error parsing GeoJSON:", e);
+//                throw new Error("Invalid GeoJSON file format");
+//            }
+//        } 
+//        else if (kmlFile) {
+//            // For KML files - convert to GeoJSON using a simple approach
+//            // Note: This is a simplified KML parser that works for basic point data
+//            // For complex KML, a proper library would be better
+//            console.log("Processing KML file:", kmlFile.name);
+//            const kmlText = await readFileAsText(kmlFile);
+//            geojson = kmlToGeoJSON(kmlText);
+//        }
+//        else if (zipFile) {
+//            // Handle zip file containing shapefile
+//            console.log("Processing ZIP file:", zipFile.name);
+//            const zipBuffer = await readFileAsArrayBuffer(zipFile);
+//            geojson = await shp.parseZip(zipBuffer);
+//        } 
+//        else if (shpFile) {
+//            // Handle individual shp file, optionally with dbf
+//            console.log("Processing SHP file:", shpFile.name);
+//            const shpBuffer = await readFileAsArrayBuffer(shpFile);
+//            geojson = await shp.parseShp(shpBuffer);
+//            
+//            // If we have a DBF file, add attributes to the features
+//            if (dbfFile) {
+//                console.log("Processing DBF file:", dbfFile.name);
+//                const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
+//                const dbfData = await shp.parseDbf(dbfBuffer);
+//                
+//                console.log("DBF data structure:", 
+//                    dbfData && typeof dbfData === 'object' ? Object.keys(dbfData) : 'unexpected format');
+//                
+//                // Attempt to merge DBF attributes with SHP geometry
+//                if (geojson.features && dbfData.features) {
+//                    // Standard case
+//                    geojson.features.forEach((feature, i) => {
+//                        if (i < dbfData.features.length) {
+//                            feature.properties = dbfData.features[i].properties;
+//                        }
+//                    });
+//                } else if (dbfData && Array.isArray(geojson)) {
+//                    // Special case: SHP is array but DBF has different structure
+//                    console.log("Special case: SHP is array but DBF has different structure");
+//                    
+//                    // If DBF has records directly
+//                    if (dbfData.records && Array.isArray(dbfData.records)) {
+//                        geojson.forEach((feature, i) => {
+//                            if (i < dbfData.records.length) {
+//                                if (!feature.properties) feature.properties = {};
+//                                Object.assign(feature.properties, dbfData.records[i]);
+//                            }
+//                        });
+//                    }
+//                }
+//            }
+//            
+//            // If we have a PRJ file, we could use it for reprojection
+//            if (prjFile) {
+//                // Just read and log for now - projection is usually handled by Leaflet
+//                const prjText = await readFileAsText(prjFile);
+//                console.log("Projection information detected");
+//            }
+//        } else {
+//            throw new Error("No compatible spatial files found. Please upload a shapefile (.shp, .zip), GeoJSON (.geojson, .json), or KML (.kml) file.");
+//        }
+//        
+//        // Debug the output structure
+//        if (geojson) {
+//            console.log("GeoJSON structure type:", typeof geojson);
+//            if (Array.isArray(geojson)) {
+//                console.log("GeoJSON is an array with", geojson.length, "items");
+//            } else if (typeof geojson === 'object') {
+//                console.log("GeoJSON object keys:", Object.keys(geojson));
+//            }
+//        } else {
+//            throw new Error("Failed to parse spatial data - no valid GeoJSON structure created");
+//        }
+//        
+//        // Process and display the GeoJSON
+//        displayShapefilePoints(geojson);
+//        
+//    } catch (error) {
+//        console.error("Error processing spatial data:", error);
+//        showNotification(`Error: ${error.message}`, 'error');
+//    } finally {
+//        // Hide loading indicator
+//        document.querySelector('.shapefile-upload').classList.remove('loading');
+//        
+//        // Remove loading count if it exists
+//        const countElement = document.querySelector('.loading-count');
+//        if (countElement) {
+//            countElement.remove();
+//        }
+//    }
+//}
 
 // Simple KML to GeoJSON converter for point data
 function kmlToGeoJSON(kmlString) {
@@ -6788,7 +7497,9 @@ function displayShapefilePoints(geojson) {
             }
         });
     }
-    
+
+
+
     // Helper function to add a point to the map with coordinate validation
     function addPointToMap(coords, properties) {
         // Sanity check the coordinates
@@ -6825,18 +7536,69 @@ function displayShapefilePoints(geojson) {
         }
         
         try {
-            // Create marker with star icon
-            const marker = L.marker([lat, lon], {
-                icon: starIcon,
-                title: getPointTitle(properties)
+            // Extract important properties for marker
+            const nameValue = properties.name || properties.NAME || properties.Name || null;
+            
+            // Find peak wind attribute (case-insensitive)
+            const windKey = Object.keys(properties).find(key => 
+                key.toLowerCase().includes('peak_wind')) || null;
+            const windValue = windKey ? parseFloat(properties[windKey]) : null;
+            
+            // Determine marker color based on wind speed
+            let markerColor = '#FFD700'; // Default gold star color
+            let category = null;
+            
+            // If wind value exists and is a valid number, get the appropriate category color
+            if (windValue !== null && !isNaN(windValue)) {
+                category = getHurricaneCategory(windValue);
+                markerColor = category.color;
+            }
+            
+            // Create custom marker icon with color based on wind speed
+            const starIcon = L.divIcon({
+                className: 'star-marker',
+                html: `<div style="color:${markerColor}; font-size: 20px; text-align: center; line-height: 20px;">★</div>`,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
             });
             
-            // Add popup with properties
+            // Create marker with colored star icon
+            const marker = L.marker([lat, lon], {
+                icon: starIcon,
+                title: nameValue || getPointTitle(properties)
+            });
+            
+            // Store important properties directly on the marker for reference
+            marker.nameValue = nameValue;
+            marker.windKey = windKey;
+            marker.windValue = windValue;
+            marker.category = category ? category.name : null;
+            
+            // Add popup with properties for click interaction
             if (properties) {
-                marker.bindPopup(createShapefilePopup(properties), {
+                marker.bindPopup(createShapefilePopup(properties, nameValue, windKey, windValue), {
                     className: 'shapefile-popup',
                     maxWidth: 300
                 });
+            }
+            
+            // Add permanent tooltip with site name and wind speed above marker
+            if (nameValue) {
+                // Create tooltip content with site name and wind speed (if available)
+                let tooltipContent = nameValue;
+                
+                // Add wind speed below the site name if available
+                if (windValue !== null && !isNaN(windValue)) {
+                    tooltipContent += `<br><span class="wind-value">${formatWindSpeed(windValue)}</span>`;
+                }
+                
+                marker.bindTooltip(tooltipContent, {
+                    permanent: true,
+                    direction: 'top',
+                    className: 'site-name-label',
+                    offset: [0, -10],
+                    opacity: 0.9
+                }).openTooltip();
             }
             
             // Add to layer group
@@ -6848,6 +7610,43 @@ function displayShapefilePoints(geojson) {
             console.error("Error adding marker at", [lat, lon], ":", e.message);
         }
     }
+
+    // Add CSS for site name labels with wind values
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add the existing event listener code...
+
+        // Add CSS for site name labels if it doesn't exist yet
+        if (!document.getElementById('site-label-styles')) {
+            const style = document.createElement('style');
+            style.id = 'site-label-styles';
+            style.textContent = `
+                .site-name-label {
+                    background-color: rgba(0, 0, 0, 0.7);
+                    border: 1px solid rgba(255, 255, 255, 0.5);
+                    border-radius: 3px;
+                    color: white;
+                    font-size: 11px;
+                    padding: 2px 6px;
+                    font-weight: 500;
+                    white-space: nowrap;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+                    z-index: 1000 !important;
+                }
+                .leaflet-tooltip-top.site-name-label::before {
+                    border-top-color: rgba(0, 0, 0, 0.7);
+                }
+                .site-name-label .wind-value {
+                    font-size: 10px;
+                    font-weight: normal;
+                    opacity: 0.9;
+                    display: block;
+                    text-align: center;
+                    margin-top: 1px;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    });
     
     // Get a title for the point from properties
     function getPointTitle(properties) {

@@ -3547,3 +3547,28 @@ body.dark-mode .datetime-label div,
     background-color: rgba(255, 255, 255, 0.1);
     transition: all 0.2s ease;
 }
+
+#export-map-btn {
+    margin-top: 8px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(40, 40, 40, 0.8);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+#export-map-btn:hover {
+    background-color: rgba(60, 60, 60, 0.9);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+#export-map-btn i {
+    margin-right: 5px;
+}

@@ -713,25 +713,34 @@ function initializeMap() {
     // Add fullscreen control
     addFullscreenControl();
     
+    // Add screenshot control
+    addScreenshotControl();
+    
     // Set up basemap selector handler
     const basemapSelector = document.getElementById('basemap-selector');
     if (basemapSelector) {
-        basemapSelector.value = 'satellite'; // Set the dropdown to match
+        basemapSelector.value = 'satellite';
         basemapSelector.addEventListener('change', function() {
             changeBasemap(this.value);
         });
+        
+        // Remove export button if it exists
+        const existingExportBtn = document.getElementById('export-map-btn');
+        if (existingExportBtn) {
+            existingExportBtn.remove();
+        }
     }
+    
+    // Rest of your existing initializeMap code...
     
     // Add zoom event handler to update A-deck symbology
     map.on('zoomend', function() {
         updateAdeckSymbology();
         updateDateLabels();
-        //console.log('Zoom changed, updating date labels');
     });
     
     map.on('moveend', function() {
         updateDateLabels();
-        //console.log("Map moved, updating date labels2");
     });
 
     // Wait for map to be ready before adding legend
@@ -2909,8 +2918,11 @@ async function loadCSVFile(file) {
     try {
         isBdeckTrackLoaded = false;
 
-        // Show loading indicator
-        document.getElementById('loading-indicator').classList.remove('hidden');
+        // Show loading indicator - with null check
+        const loadingIndicator = document.getElementById('loading-indicator');
+        if (loadingIndicator) {
+            loadingIndicator.classList.remove('hidden');
+        }
         
         console.log("Loading CSV file:", file.name);
         
@@ -2927,8 +2939,11 @@ async function loadCSVFile(file) {
         // Display markers on map - in this case we DO want to fit bounds
         displayMarkers(true);
         
-        // Show export button
-        document.getElementById('export-btn').classList.remove('hidden');
+        // Show export button - with null check
+        const exportBtn = document.getElementById('export-btn');
+        if (exportBtn) {
+            exportBtn.classList.remove('hidden');
+        }
         
         // Hide CSV format info - Modified to check if element exists first
         const csvFormatInfo = document.getElementById('csv-format-info');
@@ -2943,8 +2958,11 @@ async function loadCSVFile(file) {
         console.error("Error loading CSV:", error);
         showNotification(`Error: ${error.message}`, 'error');
     } finally {
-        // Hide loading indicator
-        document.getElementById('loading-indicator').classList.add('hidden');
+        // Hide loading indicator - with null check
+        const loadingIndicator = document.getElementById('loading-indicator');
+        if (loadingIndicator) {
+            loadingIndicator.classList.add('hidden');
+        }
     }
 }
 
@@ -3144,7 +3162,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Export button
     const exportBtn = document.getElementById('export-btn');
     if (exportBtn) {
-        exportBtn.addEventListener('click', exportData);
+        exportBtn.remove();
+        //exportBtn.addEventListener('click', exportData);
     }
     
     // Point selector change
@@ -6974,357 +6993,49 @@ async function loadShapefile(files) {
     }
 }
 
+// Export map as PNG image using Leaflet Screenshot Control
+function exportMapAsPng() {
+    // Show notification that we're handling this differently
+    showNotification('Use the screenshot control in the map corner to export', 'info', 5000);
+    
+    // Programmatically click the screenshot button if it exists
+    const screenshotButton = document.querySelector('.leaflet-control-easyPrint-button');
+    if (screenshotButton) {
+        screenshotButton.click();
+    }
+}
 
 
-//// Load and process shapefile - Updated with improved attribute handling
-//async function loadShapefile(files) {
-//    try {
-//        // Show loading indicator
-//        const uploadElement = document.querySelector('.shapefile-upload');
-//        uploadElement.classList.add('loading');
-//        
-//        // Reset counter if no count indicator exists
-//        if (!document.querySelector('.loading-count')) {
-//            shapefileCount = 0;
-//        }
-//        
-//        // Show loading notification
-//        showNotification('Processing spatial data...', 'info');
-//        
-//        // Find files by extension
-//        let shpFile = null;
-//        let dbfFile = null;
-//        let prjFile = null;
-//        let zipFile = null;
-//        let geoJsonFile = null;
-//        let kmlFile = null;
-//        
-//        // Check for various file types
-//        for (const file of files) {
-//            const fileName = file.name.toLowerCase();
-//            console.log("Processing file:", fileName);
-//            
-//            if (fileName.endsWith('.shp')) {
-//                shpFile = file;
-//                // Look for matching .dbf and .prj files by name
-//                const baseName = fileName.slice(0, -4); // Remove .shp extension
-//                
-//                // Look for the corresponding DBF file
-//                if (!dbfFile) {
-//                    dbfFile = Array.from(files).find(f => 
-//                        f.name.toLowerCase() === baseName + '.dbf');
-//                }
-//                
-//                // Look for the corresponding PRJ file
-//                if (!prjFile) {
-//                    prjFile = Array.from(files).find(f => 
-//                        f.name.toLowerCase() === baseName + '.prj');
-//                }
-//            } else if (fileName.endsWith('.dbf')) {
-//                dbfFile = file;
-//            } else if (fileName.endsWith('.prj')) {
-//                prjFile = file;
-//            } else if (fileName.endsWith('.zip')) {
-//                zipFile = file;
-//            } else if (fileName.endsWith('.geojson') || fileName.endsWith('.json')) {
-//                geoJsonFile = file;
-//            } else if (fileName.endsWith('.kml')) {
-//                kmlFile = file;
-//            }
-//        }
-//        
-//        let geojson = null;
-//        
-//        // Process based on available file types
-//        if (geoJsonFile) {
-//            // Handle GeoJSON directly
-//            console.log("Processing GeoJSON file:", geoJsonFile.name);
-//            const jsonText = await readFileAsText(geoJsonFile);
-//            try {
-//                geojson = JSON.parse(jsonText);
-//                console.log("Successfully parsed GeoJSON");
-//            } catch (e) {
-//                console.error("Error parsing GeoJSON:", e);
-//                throw new Error("Invalid GeoJSON file format");
-//            }
-//        } 
-//        else if (kmlFile) {
-//            // For KML files - convert to GeoJSON using a simple approach
-//            console.log("Processing KML file:", kmlFile.name);
-//            const kmlText = await readFileAsText(kmlFile);
-//            geojson = kmlToGeoJSON(kmlText);
-//        }
-//        else if (zipFile) {
-//            // Handle zip file containing shapefile
-//            console.log("Processing ZIP file:", zipFile.name);
-//            const zipBuffer = await readFileAsArrayBuffer(zipFile);
-//            geojson = await shp.parseZip(zipBuffer);
-//            
-//            // For zip files, the DBF data might already be incorporated
-//            // Check for peak_wind and name attributes
-//            console.log("Checking attributes in ZIP file contents...");
-//            scanGeoJSONForAttributes(geojson);
-//        } 
-//        else if (shpFile) {
-//            // Handle individual shp file
-//            console.log("Processing SHP file:", shpFile.name);
-//            const shpBuffer = await readFileAsArrayBuffer(shpFile);
-//            geojson = await shp.parseShp(shpBuffer);
-//            
-//            // If we have a DBF file, process attributes with our enhanced function
-//            if (dbfFile) {
-//                console.log("Processing DBF file:", dbfFile.name);
-//                const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
-//                geojson = await processDBFAttributes(dbfBuffer, geojson);
-//            }
-//            
-//            // If we have a PRJ file, we could use it for reprojection
-//            if (prjFile) {
-//                // Just read and log for now - projection is usually handled by Leaflet
-//                const prjText = await readFileAsText(prjFile);
-//                console.log("Projection information detected");
-//            }
-//        } else {
-//            throw new Error("No compatible spatial files found. Please upload a shapefile (.shp, .zip), GeoJSON (.geojson, .json), or KML (.kml) file.");
-//        }
-//        
-//        // Add helper function to scan GeoJSON for attributes of interest
-//        function scanGeoJSONForAttributes(geojson) {
-//            try {
-//                let foundPeakWind = false;
-//                let foundName = false;
-//                let peakWindKeys = [];
-//                
-//                // Function to scan properties recursively
-//                function scanProperties(properties) {
-//                    if (!properties) return;
-//                    
-//                    Object.keys(properties).forEach(key => {
-//                        // Check for peak_wind attribute (case insensitive)
-//                        if (key.toLowerCase().includes('peak_wind')) {
-//                            foundPeakWind = true;
-//                            if (!peakWindKeys.includes(key)) {
-//                                peakWindKeys.push(key);
-//                            }
-//                        }
-//                        
-//                        // Check for name attribute
-//                        if (['name', 'NAME', 'Name'].includes(key)) {
-//                            foundName = true;
-//                        }
-//                    });
-//                }
-//                
-//                // Scan feature collection
-//                if (geojson.features && Array.isArray(geojson.features)) {
-//                    geojson.features.forEach(feature => {
-//                        if (feature && feature.properties) {
-//                            scanProperties(feature.properties);
-//                        }
-//                    });
-//                }
-//                // Scan array of features
-//                else if (Array.isArray(geojson)) {
-//                    geojson.forEach(item => {
-//                        if (item && item.properties) {
-//                            scanProperties(item.properties);
-//                        }
-//                    });
-//                }
-//                
-//                console.log(`Attribute scan results - Found peak_wind: ${foundPeakWind}, Found name: ${foundName}`);
-//                if (peakWindKeys.length > 0) {
-//                    console.log(`Peak wind attribute keys found: ${peakWindKeys.join(', ')}`);
-//                }
-//                
-//            } catch (error) {
-//                console.error("Error scanning GeoJSON attributes:", error);
-//            }
-//        }
-//        
-//        // Debug the output structure and scan for attributes
-//        if (geojson) {
-//            console.log("GeoJSON structure type:", typeof geojson);
-//            if (Array.isArray(geojson)) {
-//                console.log("GeoJSON is an array with", geojson.length, "items");
-//                scanGeoJSONForAttributes(geojson);
-//            } else if (typeof geojson === 'object') {
-//                console.log("GeoJSON object keys:", Object.keys(geojson));
-//                scanGeoJSONForAttributes(geojson);
-//            }
-//        } else {
-//            throw new Error("Failed to parse spatial data - no valid GeoJSON structure created");
-//        }
-//        
-//        // Process and display the GeoJSON
-//        displayShapefilePoints(geojson);
-//        
-//    } catch (error) {
-//        console.error("Error processing spatial data:", error);
-//        showNotification(`Error: ${error.message}`, 'error');
-//    } finally {
-//        // Hide loading indicator
-//        document.querySelector('.shapefile-upload').classList.remove('loading');
-//        
-//        // Remove loading count if it exists
-//        const countElement = document.querySelector('.loading-count');
-//        if (countElement) {
-//            countElement.remove();
-//        }
-//    }
-//}
 
-
-// Load and process shapefile - Updated with improved format handling
-//async function loadShapefile(files) {
-//    try {
-//        // Show loading indicator
-//        const uploadElement = document.querySelector('.shapefile-upload');
-//        uploadElement.classList.add('loading');
-//        
-//        // Reset counter if no count indicator exists
-//        if (!document.querySelector('.loading-count')) {
-//            shapefileCount = 0;
-//        }
-//        
-//        // Show loading notification
-//        showNotification('Processing spatial data...', 'info');
-//        
-//        // Find files by extension
-//        let shpFile = null;
-//        let dbfFile = null;
-//        let prjFile = null;
-//        let zipFile = null;
-//        let geoJsonFile = null;
-//        let kmlFile = null;
-//        
-//        // Check for various file types
-//        for (const file of files) {
-//            const fileName = file.name.toLowerCase();
-//            console.log("Processing file:", fileName);
-//            
-//            if (fileName.endsWith('.shp')) {
-//                shpFile = file;
-//            } else if (fileName.endsWith('.dbf')) {
-//                dbfFile = file;
-//            } else if (fileName.endsWith('.prj')) {
-//                prjFile = file;
-//            } else if (fileName.endsWith('.zip')) {
-//                zipFile = file;
-//            } else if (fileName.endsWith('.geojson') || fileName.endsWith('.json')) {
-//                geoJsonFile = file;
-//            } else if (fileName.endsWith('.kml')) {
-//                kmlFile = file;
-//            }
-//        }
-//        
-//        let geojson = null;
-//        
-//        // Process based on available file types
-//        if (geoJsonFile) {
-//            // Handle GeoJSON directly
-//            console.log("Processing GeoJSON file:", geoJsonFile.name);
-//            const jsonText = await readFileAsText(geoJsonFile);
-//            try {
-//                geojson = JSON.parse(jsonText);
-//                console.log("Successfully parsed GeoJSON");
-//            } catch (e) {
-//                console.error("Error parsing GeoJSON:", e);
-//                throw new Error("Invalid GeoJSON file format");
-//            }
-//        } 
-//        else if (kmlFile) {
-//            // For KML files - convert to GeoJSON using a simple approach
-//            // Note: This is a simplified KML parser that works for basic point data
-//            // For complex KML, a proper library would be better
-//            console.log("Processing KML file:", kmlFile.name);
-//            const kmlText = await readFileAsText(kmlFile);
-//            geojson = kmlToGeoJSON(kmlText);
-//        }
-//        else if (zipFile) {
-//            // Handle zip file containing shapefile
-//            console.log("Processing ZIP file:", zipFile.name);
-//            const zipBuffer = await readFileAsArrayBuffer(zipFile);
-//            geojson = await shp.parseZip(zipBuffer);
-//        } 
-//        else if (shpFile) {
-//            // Handle individual shp file, optionally with dbf
-//            console.log("Processing SHP file:", shpFile.name);
-//            const shpBuffer = await readFileAsArrayBuffer(shpFile);
-//            geojson = await shp.parseShp(shpBuffer);
-//            
-//            // If we have a DBF file, add attributes to the features
-//            if (dbfFile) {
-//                console.log("Processing DBF file:", dbfFile.name);
-//                const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
-//                const dbfData = await shp.parseDbf(dbfBuffer);
-//                
-//                console.log("DBF data structure:", 
-//                    dbfData && typeof dbfData === 'object' ? Object.keys(dbfData) : 'unexpected format');
-//                
-//                // Attempt to merge DBF attributes with SHP geometry
-//                if (geojson.features && dbfData.features) {
-//                    // Standard case
-//                    geojson.features.forEach((feature, i) => {
-//                        if (i < dbfData.features.length) {
-//                            feature.properties = dbfData.features[i].properties;
-//                        }
-//                    });
-//                } else if (dbfData && Array.isArray(geojson)) {
-//                    // Special case: SHP is array but DBF has different structure
-//                    console.log("Special case: SHP is array but DBF has different structure");
-//                    
-//                    // If DBF has records directly
-//                    if (dbfData.records && Array.isArray(dbfData.records)) {
-//                        geojson.forEach((feature, i) => {
-//                            if (i < dbfData.records.length) {
-//                                if (!feature.properties) feature.properties = {};
-//                                Object.assign(feature.properties, dbfData.records[i]);
-//                            }
-//                        });
-//                    }
-//                }
-//            }
-//            
-//            // If we have a PRJ file, we could use it for reprojection
-//            if (prjFile) {
-//                // Just read and log for now - projection is usually handled by Leaflet
-//                const prjText = await readFileAsText(prjFile);
-//                console.log("Projection information detected");
-//            }
-//        } else {
-//            throw new Error("No compatible spatial files found. Please upload a shapefile (.shp, .zip), GeoJSON (.geojson, .json), or KML (.kml) file.");
-//        }
-//        
-//        // Debug the output structure
-//        if (geojson) {
-//            console.log("GeoJSON structure type:", typeof geojson);
-//            if (Array.isArray(geojson)) {
-//                console.log("GeoJSON is an array with", geojson.length, "items");
-//            } else if (typeof geojson === 'object') {
-//                console.log("GeoJSON object keys:", Object.keys(geojson));
-//            }
-//        } else {
-//            throw new Error("Failed to parse spatial data - no valid GeoJSON structure created");
-//        }
-//        
-//        // Process and display the GeoJSON
-//        displayShapefilePoints(geojson);
-//        
-//    } catch (error) {
-//        console.error("Error processing spatial data:", error);
-//        showNotification(`Error: ${error.message}`, 'error');
-//    } finally {
-//        // Hide loading indicator
-//        document.querySelector('.shapefile-upload').classList.remove('loading');
-//        
-//        // Remove loading count if it exists
-//        const countElement = document.querySelector('.loading-count');
-//        if (countElement) {
-//            countElement.remove();
-//        }
-//    }
-//}
+// Add screenshot control to map with improved settings
+function addScreenshotControl() {
+    // Check if easyPrint is available
+    if (typeof L.easyPrint !== 'function') {
+        console.error("L.easyPrint not found. Make sure the plugin is loaded.");
+        return;
+    }
+    
+    // Create the screenshot control with optimized options
+    const screenshotControl = L.easyPrint({
+        title: 'Export map as image',
+        position: 'bottomleft',
+        sizeModes: ['Current'],
+        filename: `cyclone-map-${new Date().toISOString().substring(0, 10)}`,
+        exportOnly: true,
+        hideControlContainer: true, // Hide UI controls in exports
+        hidden: false, // Show the control button
+        tileWait: 1000, // Milliseconds to wait for tiles to load
+        customWindowTitle: 'Cyclone Map Export',
+        paddingTopLeft: [10, 10], // Reduce padding on left and top
+        paddingBottomRight: [10, 10], // Reduce padding on right and bottom
+        cropAtBounds: false, // Crop exactly at the current map bounds
+        removeMinimap: true, // Remove any minimap if present
+        printModes: ['Current'] // Only allow current view
+    }).addTo(map);
+    
+    // Store the control for potential future reference
+    window.screenshotControl = screenshotControl;
+}
 
 // Simple KML to GeoJSON converter for point data
 function kmlToGeoJSON(kmlString) {

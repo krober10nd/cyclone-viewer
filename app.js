@@ -2636,7 +2636,6 @@ window.positionPopupToRight = function(marker, popup) {
     }
 }
 
-// Select a point for editing - Updated to handle isochrones and hide storm attributes in edit mode
 function selectPoint(index) {
     // If we're selecting a different point, clear isochrones from previous point
     if (selectedPoint !== index) {
@@ -2649,7 +2648,7 @@ function selectPoint(index) {
     selectedPointIndex = index;
     
     // Highlight selected marker
-    markers.forEach(marker => {
+    markers.forEach((marker, index) => {
         const markerElement = marker.getElement();
         if (marker.options.id === data[index].id) {
             markerElement.classList.add('selected-marker');
@@ -2680,7 +2679,164 @@ function selectPoint(index) {
         }
     }
     
+    // Hide tooltips on all shapefile points when a cyclone track point is selected
+    if (shapefilePoints && shapefilePoints.length > 0) {
+        shapefilePoints.forEach(marker => {
+            if (marker.getTooltip()) {
+                marker.closeTooltip();
+                marker._tooltipHidden = true; // Mark tooltip as hidden
+            }
+        });
+    }
+    
+    // Filter shapefile points based on the selected point's time
+    filterShapefilePointsByTime(index);
+    
     console.log(`Selected point ${index}, editMode=${editMode}`);
+}
+
+/**
+ * Filter shapefile points based on the time of the selected cyclone track point
+ * Only shows points within ±1 hour of the selected point's time
+ * If time information is not available, shows all points
+ * @param {number} pointIndex - Index of the selected cyclone track point
+ */
+function filterShapefilePointsByTime(pointIndex) {
+    // If no shapefile points are loaded, return early
+    if (!shapefilePoints || shapefilePoints.length === 0) {
+        return;
+    }
+    
+    console.log(`Filtering shapefile points based on time for point ${pointIndex}`);
+    
+    // Get the timestamp of the selected cyclone track point
+    let selectedTime = null;
+    
+    // Get point from data array
+    const selectedPoint = data[pointIndex];
+    if (!selectedPoint) return;
+    
+    // Try to get timestamp from regular track point
+    selectedTime = getPointTimestamp(selectedPoint);
+    
+    // For A-deck tracks, try to calculate time from tau if available
+    if (!selectedTime && selectedPoint.tau !== undefined && selectedPoint.initTime) {
+        selectedTime = calculatePointTimeFromTau(selectedPoint.initTime, selectedPoint.tau);
+    }
+    
+    // If no time information is available, show all shapefile points
+    if (!selectedTime) {
+        console.log("No time information available for selected point. Showing all shapefile points.");
+        shapefilePoints.forEach(marker => {
+            if (marker._removed) {
+                marker.addTo(shapefileLayerGroup);
+                marker._removed = false;
+            }
+            marker.setOpacity(1.0);
+        });
+        return;
+    }
+    
+    const selectedTimeMs = selectedTime.getTime();
+    const oneHourMs = 60 * 60 * 1000; // 1 hour in milliseconds
+    
+    // Track how many points match the time filter
+    let matchingPoints = 0;
+    let totalPoints = 0;
+    
+    // Filter shapefile points based on time proximity
+    shapefilePoints.forEach(marker => {
+        totalPoints++;
+        
+        // Try to find datetime information directly on marker first (new approach)
+        let markerTime = marker.timestamp;
+        
+        // Fallback to checking properties (original approach)
+        if (!markerTime || isNaN(markerTime.getTime())) {
+            if (marker.options && marker.options.properties) {
+                markerTime = extractTimeFromShapefilePoint(marker.options.properties);
+            }
+        }
+        
+        // If no valid timestamp, keep the point visible
+        if (!markerTime || isNaN(markerTime.getTime())) {
+            if (marker._removed) {
+                marker.addTo(shapefileLayerGroup);
+                marker._removed = false;
+            }
+            marker.setOpacity(1.0);
+            return;
+        }
+        
+        const markerTimeMs = markerTime.getTime();
+        const timeDiffMs = Math.abs(markerTimeMs - selectedTimeMs);
+        
+        // Show points within ±1 hour of the selected point's time
+        if (timeDiffMs <= oneHourMs) {
+            if (marker._removed) {
+                marker.addTo(shapefileLayerGroup);
+                marker._removed = false;
+            }
+            marker.setOpacity(1.0);
+            matchingPoints++;
+        } else {
+            // Either hide or fade out points outside the time window
+            marker.setOpacity(0.3);
+            // Option to completely hide: marker._removed = true; shapefileLayerGroup.removeLayer(marker);
+        }
+    });
+    
+    console.log(`Filtered shapefile points: ${matchingPoints} of ${totalPoints} points match the time filter (±1 hour)`);
+    
+    // Show notification about filtered points
+    if (matchingPoints > 0) {
+        showNotification(`Showing ${matchingPoints} shapefile points within ±1 hour of selected time`, 'info', 2000);
+    } else if (totalPoints > 0) {
+        showNotification('No shapefile points found within ±1 hour of selected time', 'warning', 2000);
+    }
+}
+
+/**
+ * Extract timestamp from shapefile point properties
+ * Handles various common date/time property formats
+ * @param {Object} properties - Properties object from a shapefile point
+ * @return {Date|null} - Date object if valid time found, null otherwise
+ */
+function extractTimeFromShapefilePoint(properties) {
+    if (!properties) return null;
+    
+    try {
+        // Try various common date/time field formats
+        if (properties.time || properties.datetime || properties.timestamp) {
+            const timeStr = properties.time || properties.datetime || properties.timestamp;
+            const time = new Date(timeStr);
+            if (!isNaN(time.getTime())) return time;
+        }
+        
+        // Try separate date and time fields
+        if (properties.date && (properties.time || properties.hour)) {
+            const dateStr = properties.date;
+            const timeStr = properties.time || properties.hour || "00:00:00";
+            const time = new Date(`${dateStr}T${timeStr}`);
+            if (!isNaN(time.getTime())) return time;
+        }
+        
+        // Try date components (year, month, day, etc.)
+        if (properties.year && properties.month && properties.day) {
+            const year = properties.year;
+            const month = properties.month - 1; // JavaScript months are 0-indexed
+            const day = properties.day;
+            const hour = properties.hour || 0;
+            const minute = properties.minute || 0;
+            const time = new Date(Date.UTC(year, month, day, hour, minute));
+            if (!isNaN(time.getTime())) return time;
+        }
+        
+        return null;
+    } catch(e) {
+        console.error("Error extracting time from shapefile point:", e);
+        return null;
+    }
 }
 
 // Toggle edit mode - updated to preserve map view and clear isochrones
@@ -4149,77 +4305,6 @@ function addPointToMap(coords, properties) {
         }).openTooltip();
     }
 }
-
-// Enhanced version of createShapefilePopup
-function createShapefilePopup(properties, nameValue, windKey, windValue) {
-    // Create header with name if available
-    const headerTitle = nameValue || "Shapefile Point";
-
-    let content = `<div class="popup-content">
-        <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
-            <strong>${headerTitle}</strong>
-        </div>`;
-
-    // Add wind speed in a special highlighted section if available
-    if (windKey && windValue !== null && !isNaN(windValue)) {
-        // Use formatWindSpeed function which properly handles unit system
-        const formattedWind = typeof formatWindSpeed === 'function' 
-            ? formatWindSpeed(windValue) 
-            : `${windValue} m/s`;
-
-        content += `
-        <div class="popup-highlight-section" style="background-color:rgba(0, 170, 255, 0.1); padding: 5px; margin-bottom: 8px; border-left: 3px solid #00AAFF;">
-            <strong>${windKey}:</strong> ${formattedWind}
-        </div>`;
-    }
-
-    content += `<div class="popup-metrics">`;
-
-    // Display all properties in a nicely formatted way, skipping ones we've already highlighted
-    for (const [key, value] of Object.entries(properties)) {
-        // Skip the properties we've already displayed prominently
-        if ((key === windKey) || 
-            (nameValue && (key === 'name' || key === 'NAME' || key === 'Name'))) {
-            continue;
-        }
-
-        if (value !== null && value !== undefined) {
-            // Format different types of values appropriately
-            let displayValue = value;
-            
-            if (typeof value === 'number') {
-                // Check if this appears to be a distance or speed measurement
-                if (key.toLowerCase().includes('dist') || 
-                    key.toLowerCase().includes('radius') || 
-                    key.toLowerCase().includes('size')) {
-                    // Format as distance with proper units
-                    displayValue = formatDistance(value);
-                } else if (key.toLowerCase().includes('speed') || 
-                          key.toLowerCase().includes('velocity') || 
-                          key.toLowerCase().includes('wind')) {
-                    // Format as wind speed with proper units
-                    displayValue = formatWindSpeed(value);
-                } else {
-                    // Regular number formatting for non-unit values
-                    displayValue = formatNumber(value, Number.isInteger(value) ? 0 : 2);
-                }
-            } else if (typeof value === 'string' && value.length > 50) {
-                // Truncate long strings
-                displayValue = value.substring(0, 47) + '...';
-            }
-
-            content += `
-            <div class="metric">
-                <strong class="var-name">${key}:</strong> 
-                <span class="var-value">${displayValue}</span>
-            </div>`;
-        }
-    }
-
-    content += `</div></div>`;
-    return content;
-}
-
 // Read file as array buffer with attribute extraction for binary files
 function readFileAsArrayBuffer(file) {
     return new Promise((resolve, reject) => {
@@ -4471,59 +4556,59 @@ function addPointToMap(coords, properties) {
 }
 
     // Create popup content for shapefile points with enhanced display for name and peak wind
-    function createShapefilePopup(properties, nameValue, windKey, windValue) {
-        // Create header with name if available
-        const headerTitle = nameValue || "Shapefile Point";
-
-        let content = `<div class="popup-content">
-            <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
-                <strong>${headerTitle}</strong>
-            </div>`;
-
-        // Add wind speed in a special highlighted section if available
-        if (windKey && windValue !== null && !isNaN(windValue)) {
-            // Format the wind value using the application's wind formatting
-            const formattedWind = formatWindSpeed ? formatWindSpeed(windValue) : `${windValue} m/s`;
-
-            content += `
-            <div class="popup-highlight-section" style="background-color:rgba(0, 170, 255, 0.1); padding: 5px; margin-bottom: 8px; border-left: 3px solid #00AAFF;">
-                <strong>${windKey}:</strong> ${formattedWind}
-            </div>`;
-        }
-
-        content += `<div class="popup-metrics">`;
-
-        // Display all properties in a nicely formatted way, skipping ones we've already highlighted
-        for (const [key, value] of Object.entries(properties)) {
-            // Skip the properties we've already displayed prominently
-            if ((key === windKey) || 
-                (nameValue && (key === 'name' || key === 'NAME' || key === 'Name'))) {
-                continue;
-            }
-
-            if (value !== null && value !== undefined) {
-                // Format different types of values appropriately
-                let displayValue = value;
-                if (typeof value === 'number') {
-                    // Format numbers with appropriate precision
-                    displayValue = formatNumber(value, 
-                        Number.isInteger(value) ? 0 : 2);
-                } else if (typeof value === 'string' && value.length > 50) {
-                    // Truncate long strings
-                    displayValue = value.substring(0, 47) + '...';
-                }
-
-                content += `
-                <div class="metric">
-                    <strong class="var-name">${key}:</strong> 
-                    <span class="var-value">${displayValue}</span>
-                </div>`;
-            }
-        }
-
-        content += `</div></div>`;
-        return content;
-    }
+//    function createShapefilePopup(properties, nameValue, windKey, windValue) {
+//        // Create header with name if available
+//        const headerTitle = nameValue || "Shapefile Point";
+//
+//        let content = `<div class="popup-content">
+//            <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
+//                <strong>${headerTitle}</strong>
+//            </div>`;
+//
+//        // Add wind speed in a special highlighted section if available
+//        if (windKey && windValue !== null && !isNaN(windValue)) {
+//            // Format the wind value using the application's wind formatting
+//            const formattedWind = formatWindSpeed ? formatWindSpeed(windValue) : `${windValue} m/s`;
+//
+//            content += `
+//            <div class="popup-highlight-section" style="background-color:rgba(0, 170, 255, 0.1); padding: 5px; margin-bottom: 8px; border-left: 3px solid #00AAFF;">
+//                <strong>${windKey}:</strong> ${formattedWind}
+//            </div>`;
+//        }
+//
+//        content += `<div class="popup-metrics">`;
+//
+//        // Display all properties in a nicely formatted way, skipping ones we've already highlighted
+//        for (const [key, value] of Object.entries(properties)) {
+//            // Skip the properties we've already displayed prominently
+//            if ((key === windKey) || 
+//                (nameValue && (key === 'name' || key === 'NAME' || key === 'Name'))) {
+//                continue;
+//            }
+//
+//            if (value !== null && value !== undefined) {
+//                // Format different types of values appropriately
+//                let displayValue = value;
+//                if (typeof value === 'number') {
+//                    // Format numbers with appropriate precision
+//                    displayValue = formatNumber(value, 
+//                        Number.isInteger(value) ? 0 : 2);
+//                } else if (typeof value === 'string' && value.length > 50) {
+//                    // Truncate long strings
+//                    displayValue = value.substring(0, 47) + '...';
+//                }
+//
+//                content += `
+//                <div class="metric">
+//                    <strong class="var-name">${key}:</strong> 
+//                    <span class="var-value">${displayValue}</span>
+//                </div>`;
+//            }
+//        }
+//
+//        content += `</div></div>`;
+//        return content;
+//    }
     // Get a title for the point from properties
     function getPointTitle(properties) {
         if (!properties) return "Shapefile Point";
@@ -4646,40 +4731,6 @@ function addPointToMap(coords, properties) {
     } else {
         showNotification('No point features found in shapefile - check console for details', 'warning');
     }
-}
-
-// Create popup content for shapefile points
-function createShapefilePopup(properties) {
-    let content = `<div class="popup-content">
-        <div class="popup-header" style="background-color:rgba(255, 221, 0, 0.2); border-color:#ffdd00">
-            <strong>Shapefile Point</strong>
-        </div>
-        <div class="popup-metrics">`;
-    
-    // Display all properties in a nicely formatted way
-    for (const [key, value] of Object.entries(properties)) {
-        if (value !== null && value !== undefined) {
-            // Format different types of values appropriately
-            let displayValue = value;
-            if (typeof value === 'number') {
-                // Format numbers with appropriate precision
-                displayValue = formatNumber(value, 
-                    Number.isInteger(value) ? 0 : 2);
-            } else if (typeof value === 'string' && value.length > 50) {
-                // Truncate long strings
-                displayValue = value.substring(0, 47) + '...';
-            }
-            
-            content += `
-            <div class="metric">
-                <strong class="var-name">${key}:</strong> 
-                <span class="var-value">${displayValue}</span>
-            </div>`;
-        }
-    }
-    
-    content += `</div></div>`;
-    return content;
 }
 
 // Clear shapefile points from the map
@@ -6351,6 +6402,22 @@ function deselectAll() {
     // Clear all storm visualizations
     clearAllStormVisualizations();
     
+    // Restore all shapefile points to visible
+    if (shapefilePoints && shapefilePoints.length > 0) {
+        shapefilePoints.forEach(marker => {
+            if (marker._removed) {
+                marker.addTo(shapefileLayerGroup);
+                marker._removed = false;
+            }
+            marker.setOpacity(1.0);
+            // Restore tooltips that were hidden when a point was selected
+            if (marker._tooltipHidden && marker.getTooltip()) {
+               marker.openTooltip();
+               marker._tooltipHidden = false;
+            }
+        });
+    }
+    
     // Deselect any track in ADECK data
     if (selectedStormId !== null) {
         selectedStormId = null;
@@ -6390,6 +6457,7 @@ function deselectAll() {
     // Show notification
     showNotification('All selections cleared', 'info', 1500);
 }
+
 
 // Handle document clicks to close floating dialog when clicking outside
 document.addEventListener('DOMContentLoaded', function() {
@@ -7081,215 +7149,6 @@ function createStarIcon() {
     });
 }
 
-
-// Load and process shapefile - Updated with improved format handling
-async function loadShapefile(files) {
-    try {
-        // Show loading indicator
-        const uploadElement = document.querySelector('.shapefile-upload');
-        uploadElement.classList.add('loading');
-        
-        // Reset counter if no count indicator exists
-        if (!document.querySelector('.loading-count')) {
-            shapefileCount = 0;
-        }
-        
-        // Show loading notification
-        showNotification('Processing spatial data...', 'info');
-        
-        // Find files by extension
-        let shpFile = null;
-        let dbfFile = null;
-        let prjFile = null;
-        let zipFile = null;
-        let geoJsonFile = null;
-        let kmlFile = null;
-        
-        // Check for various file types
-        for (const file of files) {
-            const fileName = file.name.toLowerCase();
-            console.log("Processing file:", fileName);
-            
-            if (fileName.endsWith('.shp')) {
-                shpFile = file;
-                // Look for matching .dbf and .prj files by name
-                const baseName = fileName.slice(0, -4); // Remove .shp extension
-                
-                // Look for the corresponding DBF file
-                if (!dbfFile) {
-                    dbfFile = Array.from(files).find(f => 
-                        f.name.toLowerCase() === baseName + '.dbf');
-                }
-                
-                // Look for the corresponding PRJ file
-                if (!prjFile) {
-                    prjFile = Array.from(files).find(f => 
-                        f.name.toLowerCase() === baseName + '.prj');
-                }
-            } else if (fileName.endsWith('.dbf')) {
-                dbfFile = file;
-            } else if (fileName.endsWith('.prj')) {
-                prjFile = file;
-            } else if (fileName.endsWith('.zip')) {
-                zipFile = file;
-            } else if (fileName.endsWith('.geojson') || fileName.endsWith('.json')) {
-                geoJsonFile = file;
-            } else if (fileName.endsWith('.kml')) {
-                kmlFile = file;
-            }
-        }
-        
-        let geojson = null;
-        
-        // Process based on available file types
-        if (geoJsonFile) {
-            // Handle GeoJSON directly
-            console.log("Processing GeoJSON file:", geoJsonFile.name);
-            const jsonText = await readFileAsText(geoJsonFile);
-            try {
-                geojson = JSON.parse(jsonText);
-                console.log("Successfully parsed GeoJSON");
-            } catch (e) {
-                console.error("Error parsing GeoJSON:", e);
-                throw new Error("Invalid GeoJSON file format");
-            }
-        } 
-        else if (kmlFile) {
-            // For KML files - convert to GeoJSON using a simple approach
-            console.log("Processing KML file:", kmlFile.name);
-            const kmlText = await readFileAsText(kmlFile);
-            geojson = kmlToGeoJSON(kmlText);
-        }
-        else if (zipFile) {
-            // Handle zip file containing shapefile
-            console.log("Processing ZIP file:", zipFile.name);
-            const zipBuffer = await readFileAsArrayBuffer(zipFile);
-            geojson = await shp.parseZip(zipBuffer);
-            
-            // For zip files, the DBF data might already be incorporated
-            // Check for peak_wind and name attributes
-            console.log("Checking attributes in ZIP file contents...");
-            scanGeoJSONForAttributes(geojson);
-        } 
-        else if (shpFile) {
-            // Handle individual shp file
-            console.log("Processing SHP file:", shpFile.name);
-            const shpBuffer = await readFileAsArrayBuffer(shpFile);
-            geojson = await shp.parseShp(shpBuffer);
-            
-            // If we have a DBF file, process attributes with our enhanced function
-            if (dbfFile) {
-                console.log("Processing DBF file:", dbfFile.name);
-                const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
-                geojson = await processDBFAttributes(dbfBuffer, geojson);
-            } else {
-                console.log("No DBF file found - continuing with geometry only");
-                // Initialize empty properties if needed
-                if (geojson.features) {
-                    geojson.features.forEach(feature => {
-                        if (!feature.properties) {
-                            feature.properties = {};
-                        }
-                    });
-                }
-            }
-            
-            // If we have a PRJ file, we could use it for reprojection
-            if (prjFile) {
-                // Just read and log for now - projection is usually handled by Leaflet
-                const prjText = await readFileAsText(prjFile);
-                console.log("Projection information detected");
-            }
-        } else {
-            throw new Error("No compatible spatial files found. Please upload a shapefile (.shp, .zip), GeoJSON (.geojson, .json), or KML (.kml) file.");
-        }
-        
-        // Add helper function to scan GeoJSON for attributes of interest
-        function scanGeoJSONForAttributes(geojson) {
-            try {
-                let foundPeakWind = false;
-                let foundName = false;
-                let peakWindKeys = [];
-                
-                // Function to scan properties recursively
-                function scanProperties(properties) {
-                    if (!properties) return;
-                    
-                    Object.keys(properties).forEach(key => {
-                        // Check for peak_wind attribute (case insensitive)
-                        if (key.toLowerCase().includes('peak_wind')) {
-                            foundPeakWind = true;
-                            if (!peakWindKeys.includes(key)) {
-                                peakWindKeys.push(key);
-                            }
-                        }
-                        
-                        // Check for name attribute
-                        if (['name', 'NAME', 'Name'].includes(key)) {
-                            foundName = true;
-                        }
-                    });
-                }
-                
-                // Scan feature collection
-                if (geojson && geojson.features && Array.isArray(geojson.features)) {
-                    geojson.features.forEach(feature => {
-                        if (feature && feature.properties) {
-                            scanProperties(feature.properties);
-                        }
-                    });
-                }
-                // Scan array of features
-                else if (geojson && Array.isArray(geojson)) {
-                    geojson.forEach(item => {
-                        if (item && item.properties) {
-                            scanProperties(item.properties);
-                        }
-                    });
-                }
-                
-                console.log(`Attribute scan results - Found peak_wind: ${foundPeakWind}, Found name: ${foundName}`);
-                if (peakWindKeys.length > 0) {
-                    console.log(`Peak wind attribute keys found: ${peakWindKeys.join(', ')}`);
-                }
-                
-            } catch (error) {
-                console.error("Error scanning GeoJSON attributes:", error);
-            }
-        }
-        
-        // Debug the output structure and scan for attributes
-        if (geojson) {
-            console.log("GeoJSON structure type:", typeof geojson);
-            if (Array.isArray(geojson)) {
-                console.log("GeoJSON is an array with", geojson.length, "items");
-                scanGeoJSONForAttributes(geojson);
-            } else if (typeof geojson === 'object') {
-                console.log("GeoJSON object keys:", Object.keys(geojson));
-                scanGeoJSONForAttributes(geojson);
-            }
-        } else {
-            throw new Error("Failed to parse spatial data - no valid GeoJSON structure created");
-        }
-        
-        // Process and display the GeoJSON
-        displayShapefilePoints(geojson);
-        
-    } catch (error) {
-        console.error("Error processing spatial data:", error);
-        showNotification(`Error: ${error.message}`, 'error');
-    } finally {
-        // Hide loading indicator
-        document.querySelector('.shapefile-upload').classList.remove('loading');
-        
-        // Remove loading count if it exists
-        const countElement = document.querySelector('.loading-count');
-        if (countElement) {
-            countElement.remove();
-        }
-    }
-}
-
 // Export map as PNG image using Leaflet Screenshot Control
 function exportMapAsPng() {
     // Show notification that we're handling this differently
@@ -7506,119 +7365,123 @@ function displayShapefilePoints(geojson) {
         });
     }
 
-
-
-    // Helper function to add a point to the map with coordinate validation
-    function addPointToMap(coords, properties) {
-        // Sanity check the coordinates
-        if (!coords || !Array.isArray(coords) || coords.length < 2) {
-            console.log("Invalid coordinates:", coords);
-            return;
-        }
-        
-        // Check which coordinate is likely latitude vs longitude
-        let lat, lon;
-        
-        // Standard GeoJSON is [longitude, latitude], but some files might be [latitude, longitude]
-        if (coords[0] >= -180 && coords[0] <= 180 && coords[1] >= -90 && coords[1] <= 90) {
-            // Likely [longitude, latitude] format (GeoJSON standard)
-            lon = coords[0];
-            lat = coords[1];
-        } else if (coords[1] >= -180 && coords[1] <= 180 && coords[0] >= -90 && coords[0] <= 90) {
-            // Likely [latitude, longitude] format (non-standard)
-            lat = coords[0];
-            lon = coords[1];
-        } else {
-            // If still not clear, assume GeoJSON standard [longitude, latitude]
-            lon = coords[0];
-            lat = coords[1];
-            
-            // Log this case to help debug
-            console.log("Unusual coordinates:", coords, "- assuming [lon, lat]");
-        }
-        
-        // Extra check for valid latitude/longitude (reject extreme values)
-        if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-            console.log("Coordinates out of range - skipping:", coords);
-            return;
-        }
-        
-        try {
-            // Extract important properties for marker
-            const nameValue = properties.name || properties.NAME || properties.Name || null;
-            
-            // Find peak wind attribute (case-insensitive)
-            const windKey = Object.keys(properties).find(key => 
-                key.toLowerCase().includes('peak_wind')) || null;
-            const windValue = windKey ? parseFloat(properties[windKey]) : null;
-            
-            // Determine marker color based on wind speed
-            let markerColor = '#FFD700'; // Default gold star color
-            let category = null;
-            
-            // If wind value exists and is a valid number, get the appropriate category color
-            if (windValue !== null && !isNaN(windValue)) {
-                category = getHurricaneCategory(windValue);
-                markerColor = category.color;
-            }
-            
-            // Create custom marker icon with color based on wind speed
-            const starIcon = L.divIcon({
-                className: 'star-marker',
-                html: `<div style="color:${markerColor}; font-size: 20px; text-align: center; line-height: 20px;">★</div>`,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-            });
-            
-            // Create marker with colored star icon
-            const marker = L.marker([lat, lon], {
-                icon: starIcon,
-                title: nameValue || getPointTitle(properties)
-            });
-            
-            // Store important properties directly on the marker for reference
-            marker.nameValue = nameValue;
-            marker.windKey = windKey;
-            marker.windValue = windValue;
-            marker.category = category ? category.name : null;
-            
-            // Add popup with properties for click interaction
-            if (properties) {
-                marker.bindPopup(createShapefilePopup(properties, nameValue, windKey, windValue), {
-                    className: 'shapefile-popup',
-                    maxWidth: 300
-                });
-            }
-            
-            // Add permanent tooltip with site name and wind speed above marker
-            if (nameValue) {
-                // Create tooltip content with site name and wind speed (if available)
-                let tooltipContent = nameValue;
-                
-                // Add wind speed below the site name if available
-                if (windValue !== null && !isNaN(windValue)) {
-                    tooltipContent += `<br><span class="wind-value">${formatWindSpeed(windValue)}</span>`;
-                }
-                
-                marker.bindTooltip(tooltipContent, {
-                    permanent: true,
-                    direction: 'top',
-                    className: 'site-name-label',
-                    offset: [0, -10],
-                    opacity: 0.9
-                }).openTooltip();
-            }
-            
-            // Add to layer group
-            marker.addTo(shapefileLayerGroup);
-            
-            // Store reference
-            shapefilePoints.push(marker);
-        } catch (e) {
-            console.error("Error adding marker at", [lat, lon], ":", e.message);
-        }
+// Helper function to add a point to the map with coordinate validation
+function addPointToMap(coords, properties) {
+    // Sanity check the coordinates
+    if (!coords || !Array.isArray(coords) || coords.length < 2) {
+        console.log("Invalid coordinates:", coords);
+        return;
     }
-
+    
+    // Check which coordinate is likely latitude vs longitude
+    let lat, lon;
+    
+    // Standard GeoJSON is [longitude, latitude], but some files might be [latitude, longitude]
+    if (coords[0] >= -180 && coords[0] <= 180 && coords[1] >= -90 && coords[1] <= 90) {
+        // Likely [longitude, latitude] format (GeoJSON standard)
+        lon = coords[0];
+        lat = coords[1];
+    } else if (coords[1] >= -180 && coords[1] <= 180 && coords[0] >= -90 && coords[0] <= 90) {
+        // Likely [latitude, longitude] format (non-standard)
+        lat = coords[0];
+        lon = coords[1];
+    } else {
+        // If still not clear, assume GeoJSON standard [longitude, latitude]
+        lon = coords[0];
+        lat = coords[1];
+        
+        // Log this case to help debug
+        console.log("Unusual coordinates:", coords, "- assuming [lon, lat]");
+    }
+    
+    // Extra check for valid latitude/longitude (reject extreme values)
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+        console.log("Coordinates out of range - skipping:", coords);
+        return;
+    }
+    
+    try {
+        // Extract important properties for marker
+        const nameValue = properties.name || properties.NAME || properties.Name || null;
+        
+        // Find peak wind attribute (case-insensitive)
+        const windKey = Object.keys(properties).find(key => 
+            key.toLowerCase().includes('peak_wind')) || null;
+        const windValue = windKey ? parseFloat(properties[windKey]) : null;
+        
+        // Determine marker color based on wind speed
+        let markerColor = '#FFD700'; // Default gold star color
+        let category = null;
+        
+        // If wind value exists and is a valid number, get the appropriate category color
+        if (windValue !== null && !isNaN(windValue)) {
+            category = getHurricaneCategory(windValue);
+            markerColor = category.color;
+        }
+        
+        // Create custom marker icon with color based on wind speed
+        const starIcon = L.divIcon({
+            className: 'star-marker',
+            html: `<div style="color:${markerColor}; font-size: 20px; text-align: center; line-height: 20px;">★</div>`,
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        });
+        
+        // Create marker with colored star icon
+        const marker = L.marker([lat, lon], {
+            icon: starIcon,
+            title: nameValue || getPointTitle(properties)
+        });
+        
+        // Store important properties directly on the marker for reference
+        marker.nameValue = nameValue;
+        marker.windKey = windKey;
+        marker.windValue = windValue;
+        marker.category = category ? category.name : null;
+        
+        // Extract timestamp from properties
+        const timestamp = extractTimeFromShapefilePoint(properties);
+        marker.timestamp = timestamp; // Store timestamp directly on marker
+        
+        // Also store properties in marker.options for consistency
+        marker.options.properties = properties;
+        
+        // Add popup with properties for click interaction
+        if (properties) {
+            marker.bindPopup(createShapefilePopup(properties, nameValue, windKey, windValue), {
+                className: 'shapefile-popup',
+                maxWidth: 300
+            });
+        }
+        
+        // Add permanent tooltip with site name and wind speed above marker
+        if (nameValue) {
+            // Create tooltip content with site name and wind speed (if available)
+            let tooltipContent = nameValue;
+            
+            // Add wind speed below the site name if available
+            if (windValue !== null && !isNaN(windValue)) {
+                tooltipContent += `<br><span class="wind-value">${formatWindSpeed(windValue)}</span>`;
+            }
+            
+            marker.bindTooltip(tooltipContent, {
+                permanent: true,
+                direction: 'top',
+                className: 'site-name-label',
+                offset: [0, -10],
+                opacity: 0.9
+            }).openTooltip();
+        }
+        
+        // Add to layer group
+        marker.addTo(shapefileLayerGroup);
+        
+        // Store reference
+        shapefilePoints.push(marker);
+    } catch (e) {
+        console.error("Error adding marker at", [lat, lon], ":", e.message);
+    }
+}
     // Add CSS for site name labels with wind values
     document.addEventListener('DOMContentLoaded', function() {
         // Add the existing event listener code...
@@ -7780,7 +7643,8 @@ function displayShapefilePoints(geojson) {
     }
 }
 
-// Enhanced version of createShapefilePopup to ensure wind speeds are properly formatted
+// Create a popup for shapefile points with properties
+// Enhanced version of createShapefilePopup
 function createShapefilePopup(properties, nameValue, windKey, windValue) {
     // Create header with name if available
     const headerTitle = nameValue || "Shapefile Point";
@@ -7803,11 +7667,15 @@ function createShapefilePopup(properties, nameValue, windKey, windValue) {
 
     content += `<div class="popup-metrics">`;
 
+    // List of full datetime fields to skip
+    const datetimeFieldsToSkip = ['datetime', 'time', 'timestamp', 'date'];
+
     // Display all properties in a nicely formatted way, skipping ones we've already highlighted
     for (const [key, value] of Object.entries(properties)) {
         // Skip the properties we've already displayed prominently
         if ((key === windKey) || 
-            (nameValue && (key === 'name' || key === 'NAME' || key === 'Name'))) {
+            (nameValue && (key === 'name' || key === 'NAME' || key === 'Name')) ||
+            datetimeFieldsToSkip.includes(key.toLowerCase())) {
             continue;
         }
 
@@ -7816,8 +7684,13 @@ function createShapefilePopup(properties, nameValue, windKey, windValue) {
             let displayValue = value;
             
             if (typeof value === 'number') {
+                // Check if this is a year field
+                if (key.toLowerCase() === 'year' || key.toLowerCase().includes('year')) {
+                    // Format years as integers with no decimal places
+                    displayValue = Math.round(value).toString();
+                }
                 // Check if this appears to be a wind speed measurement
-                if (key.toLowerCase().includes('wind') || 
+                else if (key.toLowerCase().includes('wind') || 
                     key.toLowerCase().includes('speed') || 
                     key.toLowerCase().includes('velocity') || 
                     key.toLowerCase().includes('peak')) {

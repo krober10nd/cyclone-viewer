@@ -3608,3 +3608,7 @@ body.dark-mode .datetime-label div,
 .screenshot-hidden {
     visibility: hidden !important;
 }
+
+#clear-selection {
+    width: 80px;
+}

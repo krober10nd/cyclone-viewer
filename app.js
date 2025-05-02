@@ -731,7 +731,6 @@ function initializeMap() {
         }
     }
     
-    // Rest of your existing initializeMap code...
     
     // Add zoom event handler to update A-deck symbology
     map.on('zoomend', function() {
@@ -3498,8 +3497,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Export button
     const exportBtn = document.getElementById('export-btn');
     if (exportBtn) {
-        exportBtn.remove();
-        //exportBtn.addEventListener('click', exportData);
+        //exportBtn.remove();
+        exportBtn.addEventListener('click', exportData);
     }
     
     // Point selector change

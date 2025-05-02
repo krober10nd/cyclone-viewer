@@ -3181,6 +3181,28 @@ document.addEventListener('keydown', function(e) {
     }
 })
 
+function resetApp() {
+    console.log("Resetting app to default state...");
+    
+    window.location.reload();
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const currentTime = Date.now();
+        // If Esc pressed twice within 500ms, ask the user if they want to reset the app
+        if (currentTime - lastEscPressTime < 500) {
+            if (window.confirm("Reset the app to its default state?")) {
+                resetApp();
+            }
+        } else {
+            // Single Esc press - perform default deselect action
+            deselectAll();
+        }
+        lastEscPressTime = currentTime;
+    }
+});
+
 // Set initial mode status text based on editMode value
 const modeStatus = document.getElementById('mode-status');
 if (modeStatus) {

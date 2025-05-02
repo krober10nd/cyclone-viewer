@@ -28,6 +28,12 @@ let shapefilePoints = [];
 let shapefileLayerGroup = null;
 let shapefileCount = 0;
 
+// Global variables for forecast initialization
+let currentForecastTau = 0;
+let forecastLines = []; // Store forecast track lines
+let currentForecastMarkers = []; // Store markers for current forecast time
+let displayedStorms = []; // Track storms currently displayed on map
+
 // Add global variable for isochrones toggle state
 let isochronesEnabled = true; // Default to enabled
 
@@ -3452,9 +3458,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add kyboard shortcut for Clear selection 
     document.addEventListener('keydown', function(e) { 
-        // if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-        //     return ;
-        // }
 
         if (e.key === 's' || e.key === 'S') {
             toggleStormStructures(); 
@@ -3464,7 +3467,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Escape' || e.key === 'c') {
             deselectAll();
         }
+            
+        // A-deck forecast navigation with + and - keys
+        if (e.key === '+' || e.key === '=') {  // = is on same key as + without shift
+            navigateForecast(1);
+            e.preventDefault();
+        } else if (e.key === '-' || e.key === '_') {  // _ is on same key as - with shift
+            navigateForecast(-1);
+            e.preventDefault();
+        }
+
     })
+
     
     // Set initial mode status text based on editMode value
     const modeStatus = document.getElementById('mode-status');
@@ -3865,6 +3879,72 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     document.head.appendChild(style);
 });
+
+/**
+ * Navigate through A-deck forecast increments using existing functionality
+ * @param {number} direction - 1 to go forward, -1 to go backward
+ */
+function navigateForecast(direction) {
+    // Make sure we have access to adeck reader functionality
+    if (!window.AdeckReader || !window.adeckStorms) {
+        console.log("No A-deck storms available");
+        return;
+    }
+    
+    // Get all available initialization times
+    const initTimes = Array.from(new Set(window.adeckStorms.map(storm => storm.initTime)));
+    
+    if (initTimes.length === 0) {
+        console.log("No forecast initialization times available");
+        return;
+    }
+    
+    // Sort init times in chronological order (newest first)
+    initTimes.sort((a, b) => b.localeCompare(a));
+    
+    // Find the current init time from the dropdown
+    const initTimeDropdown = document.querySelector('.init-time-dropdown');
+    let currentInitTime = initTimeDropdown ? initTimeDropdown.value : null;
+    
+    // If no current time is selected, use the first one
+    if (!currentInitTime || !initTimes.includes(currentInitTime)) {
+        currentInitTime = initTimes[0];
+    }
+    
+    // Find current index
+    const currentIndex = initTimes.indexOf(currentInitTime);
+    
+    // Calculate new index with bounds checking
+    let newIndex = currentIndex - direction; // Reverse direction (newer times are at lower indices)
+    if (newIndex < 0) newIndex = 0;
+    if (newIndex >= initTimes.length) newIndex = initTimes.length - 1;
+    
+    // Only proceed if we're actually changing to a different time
+    if (newIndex !== currentIndex) {
+        const newInitTime = initTimes[newIndex];
+        
+        // Use existing AdeckReader function to display tracks for this init time
+        // This preserves all current filtering and display preferences
+        window.AdeckReader.displayTracksByInitTime(
+            window.adeckStorms,
+            newInitTime,
+            window.currentModelFilterPreference !== undefined ? 
+                window.currentModelFilterPreference : true
+        );
+        
+        // Show notification
+        showNotification(
+            `Forecast initialization: ${window.AdeckReader.formatDateTime(newInitTime)}`, 
+            "info", 
+            1500
+        );
+        
+        // Update the dropdown if it exists
+        if (initTimeDropdown) {
+            initTimeDropdown.value = newInitTime;
+        }
+    }
+}
 
 // Make sure the map fills the available space - updated without bottom panel
 function adjustMapSize() {

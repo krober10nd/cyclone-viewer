@@ -65,6 +65,20 @@ You can also open the application directly in a web browser:
 - r34_ne, r34_se, r34_sw, r34_nw (m, 34-knot wind radii in four quadrants)
  - roci (m, radius of outermost closed isobar)
 
+ ## Hotkeys
+
+The Cyclone Viewer supports several keyboard shortcuts to enhance your workflow:
+
+| Key           | Action                                   |
+|---------------|------------------------------------------|
+| `Escape` / `c`| Clear all selections and visualizations  |
+| `+` / `=`     | Navigate to next forecast initialization |
+| `-`           | Navigate to previous forecast init       |
+| `s` / `S`     | Toggle storm structures visibility       |
+| `Escape×2`    | Quick reset application (double-press)   |
+
+These shortcuts work when the map is in focus. Using hotkeys can significantly speed up your analysis workflow, especially when working with multiple track files or complex forecasts.
+
 #### Example Track Visualization
 
 ![Example Track](images/image3_v1.png)

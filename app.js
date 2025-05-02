@@ -3540,6 +3540,7 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleIsochronesBtn.addEventListener('click', toggleIsochrones);
         console.log("Attached event listener to isochrones toggle button");
     } else {
+        toggleIsochronesBtn.style.display = 'none';
         console.warn("Could not find toggle-isochrones button");
     }
     

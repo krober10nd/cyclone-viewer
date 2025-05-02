@@ -4134,7 +4134,7 @@ function createStarIcon(windSpeed = null) {
     });
 }
 
-// Load and process shapefile - Updated with improved format handling
+// Load and process shapefile - Updated with improved polygon support
 async function loadShapefile(files) {
     try {
         // Show loading indicator
@@ -4156,6 +4156,7 @@ async function loadShapefile(files) {
         let zipFile = null;
         let geoJsonFile = null;
         let kmlFile = null;
+        let gpkgFile = null;
         
         // Check for various file types
         for (const file of files) {
@@ -4174,6 +4175,8 @@ async function loadShapefile(files) {
                 geoJsonFile = file;
             } else if (fileName.endsWith('.kml')) {
                 kmlFile = file;
+            } else if (fileName.endsWith('.gpkg')) {
+                gpkgFile = file;
             }
         }
         
@@ -4191,99 +4194,324 @@ async function loadShapefile(files) {
                 console.error("Error parsing GeoJSON:", e);
                 throw new Error("Invalid GeoJSON file format");
             }
-        } 
-        else if (kmlFile) {
-            // For KML files - convert to GeoJSON using a simple approach
-            // Note: This is a simplified KML parser that works for basic point data
-            // For complex KML, a proper library would be better
+        } else if (kmlFile) {
+            // Process KML file
             console.log("Processing KML file:", kmlFile.name);
             const kmlText = await readFileAsText(kmlFile);
-            geojson = kmlToGeoJSON(kmlText);
-        }
-        else if (zipFile) {
-            // Handle zip file containing shapefile
-            console.log("Processing ZIP file:", zipFile.name);
-            const zipBuffer = await readFileAsArrayBuffer(zipFile);
-            geojson = await shp.parseZip(zipBuffer);
-        } 
-        else if (shpFile) {
-            // Handle individual shp file, optionally with dbf
-            console.log("Processing SHP file:", shpFile.name);
+            geojson = await processKMLtoGeoJSON(kmlText);
+        } else if (gpkgFile) {
+            // Process GeoPackage file
+            console.log("Processing GeoPackage file:", gpkgFile.name);
+            await processGeoPackageFile(gpkgFile);
+            return; // GeoPackage processing has its own rendering, so return early
+        } else if (shpFile && dbfFile) {
+            // Process Shapefile
+            console.log("Processing Shapefile:", shpFile.name);
             const shpBuffer = await readFileAsArrayBuffer(shpFile);
-            geojson = await shp.parseShp(shpBuffer);
+            const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
             
-            // If we have a DBF file, add attributes to the features
-            if (dbfFile) {
-                console.log("Processing DBF file:", dbfFile.name);
-                const dbfBuffer = await readFileAsArrayBuffer(dbfFile);
-                const dbfData = await shp.parseDbf(dbfBuffer);
+            try {
+                // Use shp.js to parse shapefile
+                geojson = await shp.parseShp(shpBuffer);
+                const dbf = await shp.parseDbf(dbfBuffer);
                 
-                console.log("DBF data structure:", 
-                    dbfData && typeof dbfData === 'object' ? Object.keys(dbfData) : 'unexpected format');
-                
-                // Attempt to merge DBF attributes with SHP geometry
-                if (geojson.features && dbfData.features) {
-                    // Standard case
-                    geojson.features.forEach((feature, i) => {
-                        if (i < dbfData.features.length) {
-                            feature.properties = dbfData.features[i].properties;
+                // Combine the geometry from shp with attributes from dbf
+                if (dbf && dbf.length > 0 && geojson && geojson.length > 0) {
+                    geojson.forEach((feature, i) => {
+                        if (i < dbf.length) {
+                            feature.properties = dbf[i];
                         }
                     });
-                } else if (dbfData && Array.isArray(geojson)) {
-                    // Special case: SHP is array but DBF has different structure
-                    console.log("Special case: SHP is array but DBF has different structure");
-                    
-                    // If DBF has records directly
-                    if (dbfData.records && Array.isArray(dbfData.records)) {
-                        geojson.forEach((feature, i) => {
-                            if (i < dbfData.records.length) {
-                                if (!feature.properties) feature.properties = {};
-                                Object.assign(feature.properties, dbfData.records[i]);
-                            }
-                        });
-                    }
                 }
+            } catch (e) {
+                console.error("Error parsing shapefile:", e);
+                throw new Error("Invalid shapefile format");
+            }
+        } else if (zipFile) {
+            // Process zipped shapefile
+            console.log("Processing zipped shapefile:", zipFile.name);
+            const zipBuffer = await readFileAsArrayBuffer(zipFile);
+            
+            try {
+                geojson = await shp.parseZip(zipBuffer);
+            } catch (e) {
+                console.error("Error parsing zipped shapefile:", e);
+                throw new Error("Invalid zipped shapefile format");
+            }
+        }
+        
+        // If we have GeoJSON data, display it
+        if (geojson) {
+            // Create or clear the layer group for shapefile data
+            if (!shapefileLayerGroup) {
+                shapefileLayerGroup = L.layerGroup().addTo(map);
+            } else {
+                shapefileLayerGroup.clearLayers();
             }
             
-            // If we have a PRJ file, we could use it for reprojection
-            if (prjFile) {
-                // Just read and log for now - projection is usually handled by Leaflet
-                const prjText = await readFileAsText(prjFile);
-                console.log("Projection information detected");
+            console.log("Creating GeoJSON layer with:", geojson);
+            
+            // Create the GeoJSON layer with improved polygon styling
+            const layer = L.geoJSON(geojson, {
+                // Style function for vector features
+                style: function(feature) {
+                    // Basic style for all geometries
+                    const baseStyle = {
+                        weight: 1,           // Thin line width
+                        color: '#000000',     // Black color for lines
+                        opacity: 0.8,         // Line opacity
+                        fillColor: '#CCCCCC', // Light gray fill
+                        fillOpacity: 0.1      // Very transparent fill
+                    };
+                    
+                    // Return appropriate style based on geometry type
+                    if (feature.geometry && feature.geometry.type) {
+                        const type = feature.geometry.type;
+                        
+                        if (type.includes('Polygon')) {
+                            // For polygons: thin black lines with very transparent fill
+                            return {
+                                ...baseStyle,
+                                dashArray: null // Solid line for polygons
+                            };
+                        } else if (type.includes('Line')) {
+                            // For lines: thin black lines
+                            return {
+                                ...baseStyle,
+                                dashArray: '3,3' // Dashed line for linestrings
+                            };
+                        }
+                    }
+                    
+                    return baseStyle;
+                },
+                
+                // Handle each feature for popups and special handling
+                onEachFeature: function(feature, layer) {
+                    // Add popup with properties if available
+                    if (feature.properties) {
+                        let popupContent = '<div class="shapefile-popup">';
+                        
+                        // Add properties to popup
+                        for (const [key, value] of Object.entries(feature.properties)) {
+                            // Skip empty values or internal properties
+                            if (value !== null && value !== undefined && value !== '' && !key.startsWith('_')) {
+                                popupContent += `<strong>${key}:</strong> ${value}<br>`;
+                            }
+                        }
+                        
+                        popupContent += '</div>';
+                        
+                        if (popupContent !== '<div class="shapefile-popup"></div>') {
+                            layer.bindPopup(popupContent);
+                        }
+                    }
+                },
+                
+                // Custom handling for point geometries
+                pointToLayer: function(feature, latlng) {
+                    return L.circleMarker(latlng, {
+                        radius: 4,
+                        weight: 1,
+                        color: '#000000',
+                        fillColor: '#FFCC00',
+                        fillOpacity: 0.7
+                    });
+                }
+            }).addTo(shapefileLayerGroup);
+            
+            // Fit map to the layer bounds
+            try {
+                map.fitBounds(layer.getBounds());
+            } catch (e) {
+                console.warn("Could not fit bounds to shapefile layer:", e);
             }
-        } else {
-            throw new Error("No compatible spatial files found. Please upload a shapefile (.shp, .zip), GeoJSON (.geojson, .json), or KML (.kml) file.");
-        }
-        
-        // Debug the output structure
-        if (geojson) {
-            console.log("GeoJSON structure type:", typeof geojson);
-            if (Array.isArray(geojson)) {
-                console.log("GeoJSON is an array with", geojson.length, "items");
-            } else if (typeof geojson === 'object') {
-                console.log("GeoJSON object keys:", Object.keys(geojson));
+
+            // Extract polygon boundaries and add as separate line features 
+            if (geojson) { 
+                extractAndDisplayPolygonBoundaries(geojson);
             }
+            
+            // Store points for later use
+            shapefilePoints = [];
+            layer.eachLayer(function(layer) {
+                if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+                    shapefilePoints.push({
+                        lat: layer.getLatLng().lat,
+                        lng: layer.getLatLng().lng,
+                        properties: layer.feature.properties
+                    });
+                }
+            });
+            
+            // Show success notification
+            showNotification('Spatial data loaded successfully', 'success');
         } else {
-            throw new Error("Failed to parse spatial data - no valid GeoJSON structure created");
+            showNotification('No valid spatial data found', 'error');
         }
-        
-        // Process and display the GeoJSON
-        displayShapefilePoints(geojson);
-        
     } catch (error) {
-        console.error("Error processing spatial data:", error);
-        showNotification(`Error: ${error.message}`, 'error');
+        console.error('Error loading shapefile:', error);
+        showNotification(`Error loading spatial data: ${error.message}`, 'error');
     } finally {
         // Hide loading indicator
-        document.querySelector('.shapefile-upload').classList.remove('loading');
+        const uploadElement = document.querySelector('.shapefile-upload');
+        uploadElement.classList.remove('loading');
         
-        // Remove loading count if it exists
-        const countElement = document.querySelector('.loading-count');
-        if (countElement) {
-            countElement.remove();
-        }
+        // Decrement loading counter
+        updateLoadingCount(-1);
     }
 }
+
+/**
+ * Extract polygon boundaries and display them as separate lines
+ * @param {Object|Array} geojson - GeoJSON data to extract polygons from
+ */
+function extractAndDisplayPolygonBoundaries(geojson) {
+    // Convert GeoJSON features array to standard format if needed
+    const features = Array.isArray(geojson) 
+        ? geojson 
+        : (geojson.features || []);
+    
+    // Process each feature
+    features.forEach(feature => {
+        if (!feature.geometry) return;
+        
+        const type = feature.geometry.type;
+        const coords = feature.geometry.coordinates;
+        
+        // Handle different polygon types
+        if (type === 'Polygon') {
+            // For a simple polygon, the first ring is the exterior
+            const exteriorRing = coords[0];
+            addPolygonBoundary(exteriorRing);
+        }
+        else if (type === 'MultiPolygon') {
+            // For multipolygons, each polygon has its own exterior ring
+            coords.forEach(polygon => {
+                const exteriorRing = polygon[0];
+                addPolygonBoundary(exteriorRing);
+            });
+        }
+    });
+}
+
+/**
+ * Add a polygon boundary to the map
+ * @param {Array} coordinates - Coordinates of the polygon exterior ring
+ */
+function addPolygonBoundary(coordinates) {
+    // Convert GeoJSON coordinates to Leaflet format
+    const points = coordinates.map(coord => [coord[1], coord[0]]);
+    
+    // Create line for the boundary
+    const line = L.polyline(points, {
+        color: '#000000',
+        weight: 1.5,         // Slightly thicker for visibility
+        opacity: 0.9,        // High opacity for clear definition
+        smoothFactor: 1      // Simplify the line for better performance
+    }).addTo(shapefileLayerGroup);
+}
+
+/**
+ * Process GeoPackage file
+ * @param {File} file - GeoPackage file to process
+ */
+async function processGeoPackageFile(file) {
+    try {
+        // Create or clear the layer group
+        if (!shapefileLayerGroup) {
+            shapefileLayerGroup = L.layerGroup().addTo(map);
+        } else {
+            shapefileLayerGroup.clearLayers();
+        }
+        
+        // Read file as ArrayBuffer
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        
+        // Make sure GeoPackage is available
+        if (!window.GeoPackage) {
+            throw new Error("GeoPackage library not loaded. Please add it to your HTML.");
+        }
+        
+        // Open the GeoPackage
+        const geoPackage = await window.GeoPackage.open(arrayBuffer);
+        
+        // Get feature tables
+        const featureTables = geoPackage.getFeatureTables();
+        console.log("Feature tables found:", featureTables);
+        
+        if (featureTables.length === 0) {
+            showNotification('No feature tables found in GeoPackage', 'warning');
+            return;
+        }
+        
+        // Process each feature table
+        const layerPromises = featureTables.map(async (table) => {
+            try {
+                // Get contents as GeoJSON
+                const geoJson = await geoPackage.queryFeatureTable(table);
+                
+                if (geoJson && geoJson.features && geoJson.features.length > 0) {
+                    // Add to map with consistent styling
+                    const layer = L.geoJSON(geoJson, {
+                        style: {
+                            weight: 1,
+                            color: '#000000',
+                            opacity: 0.8,
+                            fillOpacity: 0.1
+                        },
+                        onEachFeature: function(feature, layer) {
+                            if (feature.properties) {
+                                let popupContent = '<div class="shapefile-popup">';
+                                
+                                for (const [key, value] of Object.entries(feature.properties)) {
+                                    if (value !== null && value !== undefined && value !== '' && !key.startsWith('_')) {
+                                        popupContent += `<strong>${key}:</strong> ${value}<br>`;
+                                    }
+                                }
+                                
+                                popupContent += '</div>';
+                                
+                                if (popupContent !== '<div class="shapefile-popup"></div>') {
+                                    layer.bindPopup(popupContent);
+                                }
+                            }
+                        },
+                        pointToLayer: function(feature, latlng) {
+                            return L.circleMarker(latlng, {
+                                radius: 4,
+                                weight: 1,
+                                color: '#000000',
+                                fillColor: '#FFCC00',
+                                fillOpacity: 0.7
+                            });
+                        }
+                    }).addTo(shapefileLayerGroup);
+                    
+                    return layer;
+                }
+            } catch (err) {
+                console.error(`Error processing table ${table}:`, err);
+            }
+            return null;
+        });
+        
+        // Wait for all layers to be processed
+        const layers = (await Promise.all(layerPromises)).filter(l => l !== null);
+        
+        // Fit map to bounds if we have layers
+        if (layers.length > 0) {
+            const group = L.featureGroup(layers);
+            map.fitBounds(group.getBounds());
+        }
+        
+        showNotification(`Loaded GeoPackage: ${file.name}`, 'success');
+    } catch (error) {
+        console.error("Error processing GeoPackage:", error);
+        throw error; // Rethrow to be caught by the parent function
+    }
+}
+
 
 // Simple KML to GeoJSON converter for point data
 function kmlToGeoJSON(kmlString) {

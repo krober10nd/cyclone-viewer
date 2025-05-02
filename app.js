@@ -5,8 +5,6 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-// Use global shp object loaded from CDN instead of import
-// The shpjs library is already included via <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
 
 // Global variables
 let map;
@@ -38,6 +36,9 @@ let adeckStorms = null;
 let adeckStormSelectionDialog = null;
 let selectedStormId = null;
 let currentModelName = null; // Track the currently displayed model name
+
+// Add global variable to track storm structure visibility
+let stormStructuresVisible = true; // Default to visible
 
 // Add a global variable to track if the A-deck dialog was previously shown
 let adeckDialogWasShown = false;
@@ -3183,8 +3184,66 @@ document.addEventListener('keydown', function(e) {
 
 function resetApp() {
     console.log("Resetting app to default state...");
-    
     window.location.reload();
+}
+
+
+
+// Add function to toggle storm structures visibility
+function toggleStormStructures() {
+    stormStructuresVisible = !stormStructuresVisible;
+    
+    // If structures are now visible and we have a selected point, display them
+    if (stormStructuresVisible && selectedPoint !== null) {
+        updateStormVisualizations(selectedPoint);
+    } else {
+        // Otherwise clear all structures except RMW if needed
+        clearAllStormVisualizations();
+        
+        // If structures should be hidden but RMW should remain visible, redisplay only RMW
+        if (!stormStructuresVisible && selectedPoint !== null) {
+            const point = data[selectedPoint];
+            if (point.rmw !== undefined && !isNaN(point.rmw)) {
+                displayRMWOnly(selectedPoint);
+            }
+        }
+    }
+    
+    // Show notification
+    showNotification(
+        stormStructuresVisible ? "Storm structures visible" : "Storm structures hidden", 
+        "info", 
+        1500
+    );
+}
+
+// Function to display only the RMW circle
+function displayRMWOnly(pointIndex) {
+    const point = data[pointIndex];
+    // Clear existing visualizations first
+    clearStormVisualizations(pointIndex);
+    
+    // Create container for this point's visualizations
+    stormCircles[pointIndex] = [];
+    
+    // Only add RMW (Radius of Maximum Winds)
+    if (point.rmw !== undefined && !isNaN(point.rmw)) {
+        const rmwSize = point.rmw;  // Already in meters
+        const rmwCircle = L.circle([point.latitude, point.longitude], {
+            radius: rmwSize,
+            color: '#FF0000',
+            fillColor: '#FF0000',
+            fillOpacity: 0.1,
+            weight: 2
+        }).addTo(map);
+        
+        rmwCircle.stormAttribute = 'rmw';
+        stormCircles[pointIndex].push(rmwCircle);
+        
+        if (editMode) {
+            makeCircleEditable(rmwCircle, pointIndex);
+        }
+    }
 }
 
 document.addEventListener('keydown', function(e) {
@@ -3393,6 +3452,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add kyboard shortcut for Clear selection 
     document.addEventListener('keydown', function(e) { 
+        // if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        //     return ;
+        // }
+
+        if (e.key === 's' || e.key === 'S') {
+            toggleStormStructures(); 
+            e.preventDefault();
+        }
+
         if (e.key === 'Escape' || e.key === 'c') {
             deselectAll();
         }

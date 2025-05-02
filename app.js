@@ -2936,7 +2936,7 @@ function exportData() {
             const selectedStorm = window.adeckStorms.find(storm => storm.id === selectedStormId);
             
             if (selectedStorm) {
-                console.log(`Exporting A-deck track: ${selectedStorm.model}`);
+                console.log(`Exporting A/B deck track: ${selectedStorm.model}`);
                 
                 // Use a default filename built from storm info
                 let defaultFilename = `${selectedStorm.model}-${selectedStorm.cycloneId || 'track'}-${new Date().toISOString().substring(0, 10)}`;
@@ -2966,6 +2966,14 @@ function exportData() {
                             hour_utc: pointTime.getUTCHours(),
                             minute_utc: pointTime.getUTCMinutes()
                         };
+                    } else { 
+                       timeFields = {
+                            year_utc: point.year_utc,
+                            month_utc: point.month_utc,
+                            day_utc: point.day_utc,
+                            hour_utc: point.hour_utc,
+                            minute_utc: point.minute_utc
+                        }; 
                     }
                     
                     // Create a record using short names
@@ -2973,7 +2981,7 @@ function exportData() {
                         storm_id: selectedStorm.cycloneId || '',
                         storm_name: selectedStorm.cycloneName || '',
                         model: selectedStorm.model || '',
-                        init_time: selectedStorm.initTime || '',
+                        datetime: selectedStorm.initTime || '',
                         forecast_hour: point.tau || 0,
                         latitude: point.latitude,
                         longitude: point.longitude,
@@ -5060,7 +5068,6 @@ function calculatePointTimeFromTau(initTimeString, tau) {
         return null;
     }
 }
-
 
 // Helper function to check if a parameter is specified (not null, undefined, or zero)
 function isSpecified(value) {

@@ -7530,48 +7530,126 @@ function createStarIcon() {
     });
 }
 
-// Export map as PNG image using Leaflet Screenshot Control
+// Export map as PNG image using Leaflet Screenshot Control with improved reliability
 function exportMapAsPng() {
-    // Show notification that we're handling this differently
-    showNotification('Use the screenshot control in the map corner to export', 'info', 5000);
-    
-    // Programmatically click the screenshot button if it exists
+    // Check if we have the easyPrint control
     const screenshotButton = document.querySelector('.leaflet-control-easyPrint-button');
-    if (screenshotButton) {
-        screenshotButton.click();
+    
+    // If the easyPrint button exists and we're not using a fallback
+    if (screenshotButton && !window.useExportFallback) {
+        try {
+            // First make sure all tiles are fully loaded
+            const allTilesLoaded = document.querySelectorAll('.leaflet-tile-loaded').length > 0;
+            
+            if (allTilesLoaded) {
+                // Show notification
+                showNotification('Preparing map image...', 'info', 2000);
+                
+                // Briefly delay to ensure everything renders
+                setTimeout(() => {
+                    // Attempt to use the easyPrint control
+                    screenshotButton.click();
+                }, 300);
+            } else {
+                // If tiles aren't loaded, show message and use fallback
+                showNotification('Map tiles not fully loaded, using fallback export method', 'warning', 3000);
+                exportMapWithFallback();
+            }
+        } catch (err) {
+            console.error('Error with easyPrint export:', err);
+            exportMapWithFallback();
+        }
+    } else {
+        // If no easyPrint button or previous failures, use fallback
+        exportMapWithFallback();
     }
 }
 
+// Fallback export method using html2canvas
+function exportMapWithFallback() {
+    // Flag to use fallback in subsequent exports
+    window.useExportFallback = true;
+    
+    // Show notification
+    showNotification('Exporting map image...', 'info', 2000);
+    
+    // Give tiles a moment to finish rendering
+    setTimeout(() => {
+        try {
+            // Get the map container
+            const mapContainer = document.getElementById('map');
+            
+            // Capture the current map view
+            html2canvas(mapContainer, {
+                useCORS: true,         // Enable CORS for external images
+                allowTaint: true,      // Allow tainted images
+                scale: 2,              // Higher resolution
+                backgroundColor: null, // Transparent background
+                logging: false,        // Disable logging
+            }).then(canvas => {
+                // Convert canvas to PNG and download
+                const imgData = canvas.toDataURL('image/png');
+                
+                // Create filename based on date/time
+                const date = new Date();
+                const timestamp = date.toISOString().replace(/[:.]/g, '-').substring(0, 19);
+                const filename = `cyclone-map-${timestamp}.png`;
+                
+                // Create download link
+                const link = document.createElement('a');
+                link.download = filename;
+                link.href = imgData;
+                link.click();
+                
+                showNotification('Map image exported successfully', 'success', 2000);
+            }).catch(err => {
+                console.error('Error exporting map:', err);
+                showNotification('Error exporting map image', 'error', 3000);
+            });
+        } catch (error) {
+            console.error('Error in map export:', error);
+            showNotification('Error preparing map for export', 'error', 3000);
+        }
+    }, 500);
+}
 
-
-// Add screenshot control to map with improved settings
+// Enhance the addScreenshotControl function with better options
 function addScreenshotControl() {
     // Check if easyPrint is available
     if (typeof L.easyPrint !== 'function') {
-        console.error("L.easyPrint not found. Make sure the plugin is loaded.");
+        console.warn('L.easyPrint not available, screenshot control not added');
         return;
     }
     
-    // Create the screenshot control with optimized options
-    const screenshotControl = L.easyPrint({
-        title: 'Export map as image',
-        position: 'bottomleft',
-        sizeModes: ['Current'],
-        filename: `cyclone-map-${new Date().toISOString().substring(0, 10)}`,
-        exportOnly: true,
-        hideControlContainer: true, // Hide UI controls in exports
-        hidden: false, // Show the control button
-        tileWait: 1000, // Milliseconds to wait for tiles to load
-        customWindowTitle: 'Cyclone Map Export',
-        paddingTopLeft: [10, 10], // Reduce padding on left and top
-        paddingBottomRight: [10, 10], // Reduce padding on right and bottom
-        cropAtBounds: false, // Crop exactly at the current map bounds
-        removeMinimap: true, // Remove any minimap if present
-        printModes: ['Current'] // Only allow current view
-    }).addTo(map);
-    
-    // Store the control for potential future reference
-    window.screenshotControl = screenshotControl;
+    try {
+        // Create the easyPrint control with optimized settings
+        const printPlugin = L.easyPrint({
+            title: 'Export Map',
+            position: 'bottomleft',
+            sizeModes: ['Current'],
+            filename: 'cyclone-map',
+            exportOnly: true,
+            hideControlContainer: true,
+            hideClasses: ['leaflet-control-zoom', 'leaflet-control-attribution'],
+            tileWait: 1000, // Wait for tiles to load
+            tileLayer: true  // Include tile layer
+        }).addTo(map);
+        
+        // Add a custom fix for the whitespace issues
+        const originalPrintMap = printPlugin.printMap;
+        printPlugin.printMap = function() {
+            // Force recalculation of map size before printing
+            map.invalidateSize();
+            // Small delay to let the map adjust
+            setTimeout(() => {
+                originalPrintMap.call(printPlugin);
+            }, 300);
+        };
+        
+        console.log('Screenshot control added successfully');
+    } catch (error) {
+        console.error('Error adding screenshot control:', error);
+    }
 }
 
 // Simple KML to GeoJSON converter for point data

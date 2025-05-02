@@ -19,6 +19,7 @@ let stormCircles = {}; // Store visualizations for RMW, R34, ROCI
 let floatingDialog = null;
 let ghostMarkers = {}; // Store ghost markers for original positions
 let isochroneUpdateTimeout = null; // Timeout for updating isochrones
+let lastEscPressTime = 0; // Track the last Escape key press time
 
 // Add these variables to your global scope
 let currentIsochrones = [];
@@ -2917,7 +2918,7 @@ function populatePointSelector() {
     });
 }
 
-// Export data to CSV - updated to handle both regular tracks and A-deck tracks
+// Export data to CSV - handle both regular tracks and A-deck tracks
 function exportData() {
     try {
         console.log("Exporting data...");
@@ -2928,10 +2929,9 @@ function exportData() {
             const selectedStorm = window.adeckStorms.find(storm => storm.id === selectedStormId);
             
             if (selectedStorm) {
-                // Use A-deck track for export
                 console.log(`Exporting A-deck track: ${selectedStorm.model}`);
                 
-                // Format a default filename using storm information
+                // Use a default filename built from storm info
                 let defaultFilename = `${selectedStorm.model}-${selectedStorm.cycloneId || 'track'}-${new Date().toISOString().substring(0, 10)}`;
                 let filename = window.prompt('Enter a filename for the CSV export:', defaultFilename);
                 
@@ -2946,73 +2946,58 @@ function exportData() {
                     filename += '.csv';
                 }
                 
-                // Convert the storm points to CSV-friendly format
+                // Build exported records for each forecast point.
+                // Calculate time fields from the init time and tau if available.
                 const csvData = selectedStorm.points.map(point => {
-                    // Calculate actual time from init time and tau
                     const pointTime = calculatePointTimeFromTau(selectedStorm.initTime, point.tau);
-                    
-                    // Format the time fields for CSV
                     let timeFields = {};
                     if (pointTime) {
                         timeFields = {
                             year_utc: pointTime.getUTCFullYear(),
-                            month_utc: pointTime.getUTCMonth() + 1, // JS months are 0-indexed
+                            month_utc: pointTime.getUTCMonth() + 1,
                             day_utc: pointTime.getUTCDate(),
                             hour_utc: pointTime.getUTCHours(),
                             minute_utc: pointTime.getUTCMinutes()
                         };
                     }
                     
-                    // Return point data with standardized field names
-                    return {
-                        // Add storm identification
+                    // Create a record using short names
+                    const record = {
                         storm_id: selectedStorm.cycloneId || '',
                         storm_name: selectedStorm.cycloneName || '',
                         model: selectedStorm.model || '',
                         init_time: selectedStorm.initTime || '',
                         forecast_hour: point.tau || 0,
-                        
-                        // Position data
                         latitude: point.latitude,
                         longitude: point.longitude,
-                        
-                        // Time data
-                        ...timeFields,
-                        
-                        // Intensity data
                         wind_speed: point.wind_speed || '',
                         mslp: point.mslp || '',
-                        
-                        // Storm structure data
                         rmw: point.rmw || '',
-                        r34_ne: point.r34_ne || '',
-                        r34_se: point.r34_se || '',
-                        r34_sw: point.r34_sw || '',
-                        r34_nw: point.r34_nw || '',
+                        r34_ne: point.r34_ne || point.radius_of_34_kt_winds_ne_m || '',
+                        r34_se: point.r34_se || point.radius_of_34_kt_winds_se_m || '',
+                        r34_sw: point.r34_sw || point.radius_of_34_kt_winds_sw_m || '',
+                        r34_nw: point.r34_nw || point.radius_of_34_kt_winds_nw_m || '',
                         roci: point.roci || ''
                     };
+                    
+                    // Merge the time fields
+                    const completeRecord = { ...record, ...timeFields };
+                    
+                    // Convert to long names using the field-mapper helper
+                    return window.convertObjectToLongNames(completeRecord);
                 });
                 
-                // Generate CSV content
                 const csv = Papa.unparse(csvData);
-                
-                // Create blob and download link
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 
-                // Create and trigger download
-                const link = document.createElement('a');
-                link.setAttribute('href', url);
-                link.setAttribute('download', filename);
-                link.style.display = 'none';
-                document.body.appendChild(link);
-                link.click();
-                
-                // Clean up
-                setTimeout(() => {
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                }, 100);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = url;
+                downloadLink.download = filename;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                URL.revokeObjectURL(url);
                 
                 showNotification(`${selectedStorm.model} track exported successfully`, 'success');
                 return;
@@ -3025,7 +3010,6 @@ function exportData() {
             return;
         }
         
-        // Original export code for regular track data
         let defaultFilename = `cyclone-track-${new Date().toISOString().substring(0, 10)}`;
         let filename = window.prompt('Enter a filename for the CSV export:', defaultFilename);
         
@@ -3040,26 +3024,19 @@ function exportData() {
             filename += '.csv';
         }
         
-        // Generate CSV content
-        const csv = Papa.unparse(data);
-        
-        // Create blob and download link
+        // Convert each track record to long field names using the helper
+        const convertedData = data.map(record => window.convertObjectToLongNames(record));
+        const csv = Papa.unparse(convertedData);
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         
-        // Create and trigger download
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        
-        // Clean up
-        setTimeout(() => {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 100);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = url;
+        downloadLink.download = filename;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        URL.revokeObjectURL(url);
         
         showNotification('Data exported successfully', 'success');
     } catch (error) {
@@ -3068,7 +3045,6 @@ function exportData() {
     }
 }
 
-// Load CSV file - updated to remove table references
 async function loadCSVFile(file) {
     try {
         isBdeckTrackLoaded = false;

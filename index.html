@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cyclone Track Editor/Visualizer</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.min.js"></script>
 </head>
 <body>
     <div id="notification" class="notification hidden"></div>
@@ -30,12 +32,16 @@
                         <label for="csv-file" class="file-label">CSV</label>
                         <input type="file" id="csv-file" accept=".csv" class="hidden" />
                         <button id="upload-btn" class="hover-glow">Load Custom Track</button>
+                        <div class="edit-mode-container" style="display: inline-flex; align-items: center; margin-left: 10px;">
+                            <button id="toggle-edit-mode" class="btn">Edit Mode</button>
+                            <span id="mode-status" class="view-mode" style="margin-left: 5px;">Position</span>
+                        </div>
                         <div id="loading-indicator" class="hidden">
                             <div class="spinner"></div>
                         </div>
                     </div>
                     
-                    <!-- ADECK File Upload Section - Updated label -->
+                    <!-- ADECK File Upload Section -->
                     <div class="file-upload adeck-upload">
                         <div class="upload-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -64,13 +70,7 @@
                     </div>
                     
                     <div class="compact-controls">
-                        <button id="toggle-edit-mode" class="btn">Edit Mode</button>
-                        <span id="mode-status" class="view-mode">Position</span>
-                        
-                        <!-- Add isochrone toggle button -->
-                        <button id="toggle-isochrones" class="btn btn-isochrones" title="Hide isochrones">Isochrones</button>
-                        
-                        <!-- Make the scale selector more prominent with label -->
+                        <!-- Scale selector -->
                         <span class="control-label">Scale:</span>
                         <select id="scale-select" class="btn-select" title="Change intensity scale">
                             <option value="saffir-simpson">Saffir-Simpson</option>
@@ -100,10 +100,6 @@
                     <option value="terrain">Terrain</option>
                 </select>
             </div>
-            
-            <!-- <div id="csv-format-info" class="floating-format-info">
-                <span class="format-title">CSV Format:</span> latitude,longitude,rmw,r34_ne,r34_se,r34_sw,r34_nw,roci
-            </div> -->
             
             <!-- Edit mode panel with sliders -->
             <div id="edit-panel" class="edit-panel hidden">
@@ -143,12 +139,17 @@
         </div>
     </div>
 
+    <!-- Keep the isochrone button in HTML but hidden -->
+    <button id="toggle-isochrones" class="btn hidden" style="display: none;">Isochrones</button>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
     <script src="field-mapper.js"></script>
     <script src="popup-template.js"></script>
     <script src="adeck-reader.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.min.js"></script>
     <script src="app.js"></script>
 </body>
-</html>
+</html> 

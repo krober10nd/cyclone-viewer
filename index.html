@@ -80,7 +80,7 @@
                         <button id="toggle-units" class="btn">Units</button>
                         <button id="export-btn">Export</button>
                         
-                        <!-- Add the deselect-all button here -->
+                        <!-- Deselect-all control -->
                         <button id="deselect-all" class="control-btn deselect-btn" title="Clear all selections">
                             <i class="fas fa-times-circle"></i> Clear Selections
                         </button>
@@ -88,7 +88,7 @@
                 </div>
             </div>
         </header>
-
+    
         <div id="map-container" class="panel full-height">
             <div id="map"></div>
             <div id="basemap-control" class="basemap-control">
@@ -138,18 +138,18 @@
             </div>
         </div>
     </div>
-
-    <!-- Keep the isochrone button in HTML but hidden -->
+    
+    <!-- Hidden isochrone button -->
     <button id="toggle-isochrones" class="btn hidden" style="display: none;">Isochrones</button>
-
+    
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
-    <script src="field-mapper.js"></script>
-    <script src="popup-template.js"></script>
-    <script src="adeck-reader.js"></script>
+    <script src="src/field-mapper.js"></script>
+    <script src="src/popup-template.js"></script>
+    <script src="src/adeck-reader.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.min.js"></script>
-    <script src="app.js"></script>
+    <script src="src/app.js"></script>
 </body>
-</html> 
+</html>

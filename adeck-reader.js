@@ -177,7 +177,7 @@ window.AdeckReader = {
             return storm;
         });
 
-        console.log("Storm init times:", storms.map(s => s.initTime));
+        //console.log("Storm init times:", storms.map(s => s.initTime));
         
         console.log(`Parsed ${storms.length} forecast tracks with ${processedLines} valid points from ADECK file`);
         return {

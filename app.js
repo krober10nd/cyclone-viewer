@@ -8102,8 +8102,7 @@ function addPointToMap(coords, properties) {
     }
 }
 
-// Create a popup for shapefile points with properties
-// Enhanced version of createShapefilePopup
+
 function createShapefilePopup(properties, nameValue, windKey, windValue) {
     // Create header with name if available
     const headerTitle = nameValue || "Shapefile Point";

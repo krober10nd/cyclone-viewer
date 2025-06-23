@@ -149,6 +149,16 @@ function formatPopupContent(point, index) {
             <strong class="var-name">POSITION:</strong> 
             <span class="var-value">${formatCoordinates(point.latitude, point.longitude)}</span>
         </div>`;
+
+            // Add model name if available
+         if (modelName) {
+            content += `
+            <div class="metric">
+                <strong class="var-name">MODEL:</strong> 
+                <span class="var-value">${modelName}</span>
+            </div>`;
+        }
+    
     
     // Add DateTime if available
     const dateTime = formatDateTime(point);
@@ -190,6 +200,15 @@ function formatPopupContent(point, index) {
         { key: 'roci', label: 'ROCI' }
     ];
     
+    // skip this section if no data for more than 30% of the metrics
+    const radiusDataCount = radiusMetrics.reduce((count, metric) => {
+        return count + (point[metric.key] !== undefined && point[metric.key] !== null ? 1 : 0);
+    }, 0);
+    if (radiusDataCount < radiusMetrics.length * 0.3) {
+        // Not enough data to show storm size metrics
+        return content + '</div>'; // Close popup-content
+    }
+
     // Add a mini-header for storm size parameters
     content += `
         <div class="metric-divider">
@@ -226,15 +245,6 @@ function formatPopupContent(point, index) {
             <span class="var-value">${formatDistanceUnit(value)}</span>
         </div>`;
     });
-    
-    // Add model name if available
-    if (modelName) {
-        content += `
-        <div class="metric">
-            <strong class="var-name">MODEL:</strong> 
-            <span class="var-value">${modelName}</span>
-        </div>`;
-    }
     
     content += `</div>`;
     

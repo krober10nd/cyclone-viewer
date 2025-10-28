@@ -134,6 +134,82 @@ Debug Steps:
 5. Check for syntax errors in main.js
 
 ### Symptom: No Basemap Tiles
+## Debugging Invisible Tracks
+
+Symptom: Tracks parse successfully but don't appear on the map.
+
+Diagnostic Steps:
+1. Open browser console (F12)
+2. Check for "[Adeck Parser] Parsed X tracks" message — confirms parsing worked
+3. Check for "[Adeck Renderer] Rendering X track(s)" message — confirms rendering started
+4. Type `window.trackLayers` — should show an object with track IDs
+5. Type `Object.keys(window.trackLayers).length` — should match number of parsed tracks
+6. Type `window.verifyAdeckLayers()` — shows which tracks are visible vs hidden
+
+Common Causes:
+
+1. Tracks hidden by default
+	- Root cause: localStorage has stale visibility preferences
+	- Solution: `window.fixAdeckVisibility()` in console
+	- Or clear localStorage and reload page
+	- Prevention: new tracks are now visible by default via ensure-default logic
+
+2. Tracks outside map view
+	- Root cause: `fitBounds` failed or tracks are far from initial view
+	- Solution: `window.map.fitBounds(window.map.getBounds())` to reset
+	- Try different basemap to verify map is working
+
+3. Layer groups not added to map
+	- Root cause: timing issue in renderer
+	- Solution: `window.forceShowAdeckLayers()` to force visibility
+	- Check: `window.map._layers` to inspect map layers
+
+4. Visibility state corruption
+	- Root cause: `hiddenTracks` has all tracks marked as hidden
+	- Solution: `localStorage.removeItem('adeckHiddenTracks')` then reload
+	- Check: `localStorage.getItem('adeckHiddenTracks')`
+
+Quick Fixes:
+- `window.fixAdeckVisibility()` — Make all tracks visible
+- `window.showAllAdeckTracks()` — Show all tracks
+- `window.debugMap()` — Map diagnostics
+- `localStorage.clear()` — Clear all stored preferences and reload
+
+## Debugging Basemap Issues
+
+Symptom: No basemap tiles loading (gray background).
+
+Diagnostic Steps:
+1. Open Network tab in browser console
+2. Filter by "tile" or "png"
+3. Look for tile requests — URLs to tile servers
+4. Check status codes — should be 200 (success)
+5. If no requests: basemap layer not added to map
+6. If 403/404: tile server blocking requests or down
+
+Common Causes:
+
+1. CORS issues with Esri tiles
+	- Symptom: tile requests fail with CORS
+	- Solution: switch to OpenStreetMap basemap (default)
+	- Or use dev proxy for Esri via Vite (configured)
+
+2. Tile server down
+	- Symptom: requests timeout or return 503
+	- Solution: try a different basemap; fallback to OSM triggers after 2 errors
+
+3. Network/firewall blocking
+	- Symptom: all tile requests fail
+	- Solution: check connectivity, try different network
+
+4. Basemap not added
+	- Symptom: no tile requests
+	- Solution: `window.map._layers` to inspect; run `window.debugMap()`
+
+Quick Fixes:
+- Use basemap selector to switch to OpenStreetMap
+- Manually add OSM: `window.map.addLayer(L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'))`
+- Reload and check for fallback messages
 
 Root Cause Analysis:
 

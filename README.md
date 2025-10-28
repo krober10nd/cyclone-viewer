@@ -291,6 +291,65 @@ If the visualization panel is hidden behind the storm selection dialog:
 - Or close the storm dialog temporarily
 - Fix: Update styles.css to set `.viz-panel { z-index: 1500; }`
 
+### Tracks Not Appearing
+
+Problem: A-deck or B-deck file loads successfully (log shows "Parsed X tracks") but tracks don't appear on the map.
+
+Solutions:
+1. Check if tracks are hidden
+   - Open browser console (F12)
+   - Type: `window.fixAdeckVisibility()`
+   - This makes all tracks visible
+   - Reload page to verify
+
+2. Clear stored preferences
+   - Old visibility preferences may be hiding tracks
+   - Type: `localStorage.removeItem('adeckHiddenTracks')`
+   - Reload page
+
+3. Verify tracks loaded
+   - Type: `window.trackLayers`
+   - Should show object with track IDs
+   - If empty: parsing failed, check file format
+
+4. Check map view
+   - Tracks may be outside current view
+   - Try zooming out or `window.map.setZoom(4)`
+
+### No Basemap Tiles
+
+Problem: Map loads but shows gray/blank background with no tiles.
+
+Solutions:
+1. Switch basemap
+   - Use basemap selector; try OpenStreetMap (most reliable)
+
+2. Check network
+   - Open Network tab in DevTools and look for tile requests
+
+3. Use OSM fallback
+   - The app falls back automatically after repeated errors
+
+4. Manual fix
+   - `window.map.addLayer(L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'))`
+
+### Visualization Panel Blocking Dialog
+
+Problem: Cannot click model toggle buttons because visualization panel is covering them.
+
+Solutions:
+1. Collapse visualization panel (press 'V' or click the header)
+2. In the latest version, z-index is adjusted so the storm dialog appears above the panel
+
+### Emergency Recovery Commands
+
+Open the browser console (F12) and try:
+- `window.fixAdeckVisibility()` — Make all tracks visible
+- `window.debugMap()` — Show map diagnostic info
+- `localStorage.clear()` — Clear all stored preferences
+- `window.resetMap()` — Reset map to initial state
+- `location.reload()` — Reload page after clearing storage
+
 ### Getting Help
 
 If issues persist:

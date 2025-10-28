@@ -112,7 +112,13 @@ export function createInitTimeSelector(storms = [], onChange) {
  * Filter and (re)render by the selected init time
  */
 export function displayTracksByInitTime(selectedInitTime, storms = [], map = window.map, renderCb = renderTracks) {
-  const filtered = storms.filter((s) => String(s.init) === String(selectedInitTime));
+  // Prefer filtering by init; if selectedInitTime looks invalid, fallback to model filter or render-all
+  let filtered = storms.filter((s) => String(s.init) === String(selectedInitTime));
+  if (!filtered.length) {
+    const looksLikeModel = typeof selectedInitTime === 'string' && !/^\d{10}$/.test(selectedInitTime);
+    if (looksLikeModel) filtered = storms.filter((s) => String(s.model).toUpperCase() === String(selectedInitTime).toUpperCase());
+  }
+  if (!filtered.length) filtered = storms; // last resort: show all
   // Clear previous layers before rendering new selection
   try { clearAdeckLayers(map); } catch { /* no-op */ }
   if (filtered.length) {

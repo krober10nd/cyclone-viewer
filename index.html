@@ -1,155 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyclone Track Editor/Visualizer</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.min.css" />
-    <script src="https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.min.js"></script>
-</head>
-<body>
-    <div id="notification" class="notification hidden"></div>
-    <div id="floating-dialog" class="hidden"></div>
-    
-    <div class="container">
-        <header>
-            <div class="header-row">
-                <div class="title-container">
-                    <h1 class="app-title">Cyclone Track Editor</h1>
-                    <span class="author-credit">by Keith Roberts</span>
-                </div>
-                <div class="header-controls-group">
-                    <div id="drop-zone" class="file-upload">
-                        <div class="upload-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="17 8 12 3 7 8"></polyline>
-                                <line x1="12" y1="3" x2="12" y2="15"></line>
-                            </svg>
-                        </div>
-                        <label for="csv-file" class="file-label">CSV</label>
-                        <input type="file" id="csv-file" accept=".csv" class="hidden" />
-                        <button id="upload-btn" class="hover-glow">Load Custom Track</button>
-                        <div class="edit-mode-container" style="display: inline-flex; align-items: center; margin-left: 10px;">
-                            <button id="toggle-edit-mode" class="btn">Edit Mode</button>
-                            <span id="mode-status" class="view-mode" style="margin-left: 5px;">Position</span>
-                        </div>
-                        <div id="loading-indicator" class="hidden">
-                            <div class="spinner"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- ADECK File Upload Section -->
-                    <div class="file-upload adeck-upload">
-                        <div class="upload-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="17 8 12 3 7 8"></polyline>
-                                <line x1="12" y1="3" x2="12" y2="15"></line>
-                            </svg>
-                        </div>
-                        <label for="adeck-file" class="file-label">A/B-Deck</label>
-                        <input type="file" id="adeck-file" accept=".dat,.txt,.adeck" class="hidden" />
-                        <button id="adeck-upload-btn">Load</button>
-                    </div>
-                    
-                    <!-- Shapefile Data Section -->
-                    <div class="file-upload shapefile-upload">
-                        <div class="upload-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="17 8 12 3 7 8"></polyline>
-                                <line x1="12" y1="3" x2="12" y2="15"></line>
-                            </svg>
-                        </div>
-                        <label for="shapefile-input" class="file-label">Vector(s)</label>
-                        <input type="file" id="shapefile-input" accept=".shp,.dbf,.prj,.zip,.geojson,.json,.kml" class="hidden" multiple />
-                        <button id="shapefile-btn">Load</button>
-                    </div>
-                    
-                    <div class="compact-controls">
-                        <!-- Scale selector -->
-                        <span class="control-label">Scale:</span>
-                        <select id="scale-select" class="btn-select" title="Change intensity scale">
-                            <option value="saffir-simpson">Saffir-Simpson</option>
-                            <option value="bom">Australian (BoM)</option>
-                        </select>
-                        
-                        <button id="toggle-units" class="btn">Units</button>
-                        <button id="export-btn">Export</button>
-                        
-                        <!-- Deselect-all control -->
-                        <button id="deselect-all" class="control-btn deselect-btn" title="Clear all selections">
-                            <i class="fas fa-times-circle"></i> Clear Selections
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </header>
-    
-        <div id="map-container" class="panel full-height">
-            <div id="map"></div>
-            <div id="basemap-control" class="basemap-control">
-                <select id="basemap-selector" title="Change basemap">
-                    <option value="osm">OpenStreetMap</option>
-                    <option value="carto">Carto Voyager (Roads)</option>
-                    <option value="topo">OpenTopoMap</option>
-                    <option value="satellite" selected>Satellite</option>
-                    <option value="terrain">Terrain</option>
-                </select>
-            </div>
-            
-            <!-- Edit mode panel with sliders -->
-            <div id="edit-panel" class="edit-panel hidden">
-                <h3>Storm Parameters</h3>
-                <div class="slider-control">
-                    <label for="rmw-slider">RMW (km):</label>
-                    <input type="range" id="rmw-slider" class="slider" min="0" max="100" step="1">
-                    <span id="rmw-value" class="slider-value">0</span>
-                </div>
-                <div class="slider-control">
-                    <label for="r34-ne-slider">R34 NE (km):</label>
-                    <input type="range" id="r34-ne-slider" class="slider" min="0" max="500" step="5">
-                    <span id="r34-ne-value" class="slider-value">0</span>
-                </div>
-                <div class="slider-control">
-                    <label for="r34-se-slider">R34 SE (km):</label>
-                    <input type="range" id="r34-se-slider" class="slider" min="0" max="500" step="5">
-                    <span id="r34-se-value" class="slider-value">0</span>
-                </div>
-                <div class="slider-control">
-                    <label for="r34-sw-slider">R34 SW (km):</label>
-                    <input type="range" id="r34-sw-slider" class="slider" min="0" max="500" step="5">
-                    <span id="r34-sw-value" class="slider-value">0</span>
-                </div>
-                <div class="slider-control">
-                    <label for="r34-nw-slider">R34 NW (km):</label>
-                    <input type="range" id="r34-nw-slider" class="slider" min="0" max="500" step="5">
-                    <span id="r34-nw-value" class="slider-value">0</span>
-                </div>
-                <div class="slider-control">
-                    <label for="roci-slider">ROCI (km):</label>
-                    <input type="range" id="roci-slider" class="slider" min="0" max="1000" step="10">
-                    <span id="roci-value" class="slider-value">0</span>
-                </div>
-                <button id="apply-changes" class="btn">Apply Changes</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Hidden isochrone button -->
-    <button id="toggle-isochrones" class="btn hidden" style="display: none;">Isochrones</button>
-    
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./images/logo.svg" />
+    <title>Cyclone Viewer</title>
+    <!-- Leaflet CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <!-- Leaflet JS -->
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <!-- Optional: Leaflet EasyPrint -->
+    <script src="https://rawgit.com/rowanwins/leaflet-easyPrint/gh-pages/dist/bundle.js"></script>
+    <!-- Optional: shpjs for shapefiles -->
     <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
-    <script src="src/field-mapper.js"></script>
-    <script src="src/popup-template.js"></script>
-    <script src="src/adeck-reader.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/leaflet-easyprint@2.1.9/dist/bundle.min.js"></script>
-    <script src="src/app.js"></script>
-</body>
+    <!-- Optional: PapaParse for CSV -->
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./easyprint.css" />
+  </head>
+  <body>
+    <div id="app" class="container">
+      <div id="map-container">
+        <div id="map"></div>
+      </div>
+
+      <!-- UI Controls (Floating) -->
+      <div id="ui-controls" class="ui-panel hidden">
+        <!-- Content injected by visualization-panel.js -->
+      </div>
+
+      <!-- Notification Toast -->
+      <div id="notification" class="notification hidden"></div>
+
+      <!-- Keyboard Shortcuts Modal -->
+      <div id="keyboard-shortcuts-modal" class="modal hidden">
+        <div class="modal-overlay" data-close="true"></div>
+        <div class="modal-content">
+          <h2>Keyboard Shortcuts</h2>
+          <button id="keyboard-shortcuts-close" class="close-btn">
+            &times;
+          </button>
+          <ul class="shortcuts-list">
+            <li><kbd>?</kbd> Toggle this help</li>
+            <li><kbd>Esc</kbd> Close modals / Deselect</li>
+            <!-- Add more shortcuts here -->
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
 </html>

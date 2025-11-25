@@ -17,29 +17,6 @@ import { updatePanelState } from './ui/visualization-panel.js';
 import { initializeViewManager, enterOverviewMode, enterDetailedMode, toggleViewMode } from './core/view-manager.js';
 import { initializeDebugPanel } from './ui/debug-panel.js';
 
-
-// debug 
-import * as AdeckParser from './adeck/parser.js';
-
-async function debugAdeckFile() {
-  try {
-    const resp = await fetch('data/aal142024.dat');
-    const text = await resp.text();
-    const res = AdeckParser.parseAdeckFile(text);
-    console.log('[ADECK DEBUG] storms.length =', res.storms.length);
-    console.log('[ADECK DEBUG] models =', res.storms.map(s => s.model));
-    if (res.storms[0]) {
-      console.log('[ADECK DEBUG] first track taus =', res.storms[0].points.map(p => p.tau));
-    }
-    // Expose for interactive inspection
-    window._adeckDebug = res;
-  } catch (e) {
-    console.error('[ADECK DEBUG] error parsing aal142024.dat', e);
-  }
-}
-
-debugAdeckFile();
-
 // Bridge a few globals used by legacy UI or other scripts
 window.updateDateLabels = TrackRenderer.updateDateLabels;
 window.isochronesToggle = Isochrones.isochronesToggle;
@@ -60,6 +37,13 @@ window.getModelDescription = (modelId) => (window.MODEL_DESCRIPTIONS?.[modelId] 
 
 function initializeApp() {
   console.info('[Main] Initializing application...');
+  // Idempotency guard: if a map already exists, assume app is initialized
+  try {
+    if (window.map) {
+      console.info('[Main] Map already exists; skipping re-initialization');
+      return;
+    }
+  } catch {}
   try {
     StateManager.initializeState();
     console.info('[Main] State initialized');

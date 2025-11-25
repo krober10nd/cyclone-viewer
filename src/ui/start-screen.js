@@ -49,6 +49,10 @@ export function createStartScreen() {
           <h3>Recent Files</h3>
           <ul id="recent-files-list"></ul>
         </div>
+        <div class="start-screen-loading" id="start-screen-loading">
+          <div class="spinner small"></div>
+          <span class="loading-text">Map initializing in background…</span>
+        </div>
         <div class="start-screen-footer">
           <button class="btn-secondary" id="skip-to-map-btn">Skip to Map</button>
           <label class="checkbox-label">
@@ -71,13 +75,25 @@ export function showStartScreen() {
   const overlay = createStartScreen();
   document.body.appendChild(overlay);
   bindHandlers();
+  updateLoadingIndicator('loading');
 }
 
 export function hideStartScreen() {
   if (!overlayEl) return;
   overlayEl.classList.add('fade-out');
   setTimeout(() => {
-    overlayEl.remove();
+    try { overlayEl.remove(); } catch {}
+    // Force map to re-calculate size now that overlay is gone
+    try {
+      setTimeout(() => {
+        try {
+          const map = window.map || (window.State && window.State.getMap && window.State.getMap());
+          if (map && typeof map.invalidateSize === 'function') map.invalidateSize();
+        } catch (e) {
+          console.warn('[Start Screen] map.invalidateSize failed after hide:', e);
+        }
+      }, 100);
+    } catch {}
     overlayEl = null;
   }, 200);
 }
@@ -183,14 +199,27 @@ function bindHandlers() {
   populateRecentFiles();
 }
 
+function updateLoadingIndicator(status) {
+  try {
+    const el = document.getElementById('start-screen-loading');
+    if (!el) return;
+    if (status === 'ready') {
+      el.classList.add('hidden');
+    } else {
+      el.classList.remove('hidden');
+    }
+  } catch {}
+}
+
 function ensureMapInitialized() {
   console.info('[Start Screen] Ensuring map is initialized...');
-  if (window.map) { console.info('[Start Screen] Map already exists'); return; }
+  if (window.map) { console.info('[Start Screen] Map already exists'); updateLoadingIndicator('ready'); return; }
   if (typeof window.initializeApp === 'function') {
     console.info('[Start Screen] Calling window.initializeApp()');
     try {
       window.initializeApp();
       console.info('[Start Screen] App initialized successfully');
+      updateLoadingIndicator('ready');
     } catch (e) {
       console.error('[Start Screen] App initialization failed:', e);
       window.showNotification?.('Failed to initialize map. Please refresh the page.', 'error', 5000);

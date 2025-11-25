@@ -210,6 +210,47 @@ Indicator & Persistence
 
 ## Troubleshooting
 
+### Map or Basemap Not Visible
+
+- Make sure you are running via a server (`npm run dev`, `npm run preview`, or `npm run serve`), not opening `index.html` directly.
+- If you see the start screen but no map behind it, click **Skip to Map** or load a file; the map is initialized in the background.
+- Open the browser console and run `window.debugMap()` to see:
+   - `hasTile` – whether a basemap tile layer is attached
+   - `center`, `zoom`, and `layers` – current view information
+- If `hasTile` is false, try switching the basemap using the dropdown (top-right) to **OpenStreetMap**.
+
+### Tracks Loaded but Not Visible
+
+If the console shows that A-deck/B-deck tracks were parsed but you do not see any lines:
+
+- In the browser console, run:
+   - `window.fixAdeckVisibility()` to clear stale hidden-state and show all tracks
+   - `window.showAllAdeckTracks()` to force-show all models
+   - `window.verifyAdeckLayers()` to report how many track groups are currently visible
+- You can also clear preferences entirely:
+   - `localStorage.removeItem('adeckHiddenTracks')`
+   - Or reset everything with `window.resetMap()` (which also clears localStorage) and reload.
+
+### Start Screen Blocking the Map
+
+- The start screen overlay appears on first load to guide you.
+- Click **Skip to Map** to immediately reveal the initialized map.
+- To skip the start screen next time, check **"Don't show this again"** in the footer.
+
+### Debug Helpers
+
+The app exposes several helpers on `window` for quick diagnosis:
+
+- `window.debugMap()` – logs map center, zoom, bounds, basemap presence, and A-deck layer counts.
+- `window.fixAdeckVisibility()` – clears hidden-track preferences and shows all A-deck tracks.
+- `window.showAllAdeckTracks()` – explicitly shows all A-deck tracks without clearing other settings.
+- `window.verifyAdeckLayers()` – returns the number of visible A-deck track groups.
+- `window.resetMap()` – removes all layers, restores the default basemap and view, and clears localStorage.
+
+Use these from the browser console (F12 → Console) when troubleshooting map or track visibility.
+
+## Troubleshooting
+
 ### Application Not Loading / Blank Screen
 
 If the application shows a blank screen or the start screen doesn't disappear:

@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "checkJs": false,
+    "allowJs": true,
+    "target": "ES2020"
+  },
+  "exclude": [
+    "src/app.js"
+  ]
+}

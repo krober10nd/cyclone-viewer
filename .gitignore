@@ -1,0 +1,38 @@
+# Ignore macOS metadata files
+.DS_Store
+
+# Ignore shapefile related files and associated formats
+*.shp
+*.shx
+*.dbf
+*.prj
+*.sbn
+*.sbx
+*.cpg
+*.qix
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env.local
+.env.*.local
+
+# Editor directories
+.vscode/
+.idea/
+
+# Vite cache (under node_modules)
+# node_modules/.vite/
+
+# Electron packaging outputs
+release-builds/
+out/

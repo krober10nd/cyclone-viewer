@@ -172,7 +172,8 @@ export function ensureDefaultVisibility(trackIds = []) {
   loadHidden();
   let changed = false;
   for (const id of trackIds) {
-    if (!(id in hiddenTracks)) { hiddenTracks[id] = false; changed = true; }
+    // Be aggressive: new tracks default to visible
+    if (hiddenTracks[id] !== false) { hiddenTracks[id] = false; changed = true; }
   }
   if (changed) saveHidden();
 }
@@ -212,6 +213,10 @@ export function applyStoredVisibility() {
     refreshVisibilityUI(id);
   });
   console.info('[Adeck ModelManager] Applied visibility → show:', showCount, 'hide:', hideCount, 'total:', ids.length);
+  if (hideCount && hideCount === ids.length) {
+    console.warn('[Adeck ModelManager] All tracks would be hidden by stored preferences; resetting to show all.');
+    try { showAllTracks(); } catch {}
+  }
 }
 
 /** Show all tracks and persist */
@@ -225,6 +230,13 @@ export function showAllTracks() {
 export function clearVisibilityCache() {
   try { localStorage.removeItem(HIDDEN_STORAGE_KEY); localStorage.removeItem(HIDDEN_UPDATED_AT_KEY); } catch {}
   hiddenTracks = {};
+}
+
+// Reset visibility preferences and show all tracks
+export function resetToDefaults() {
+  clearVisibilityCache();
+  try { showAllTracks(); } catch {}
+  console.info('[Adeck ModelManager] Visibility reset to defaults (all tracks shown)');
 }
 
 function refreshVisibilityUI(trackId) {

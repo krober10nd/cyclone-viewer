@@ -4,7 +4,6 @@
 import * as Parser from './adeck/parser.js';
 import * as Renderer from './adeck/renderer.js';
 import * as DialogManager from './adeck/dialog-manager.js';
-import * as TimeSlider from './adeck/time-slider.js';
 import * as ModelManager from './adeck/model-manager.js';
 
 if (typeof ModelManager.initializeModelManager === 'function') ModelManager.initializeModelManager();
@@ -39,12 +38,6 @@ window.AdeckReader = {
     toggleTrackVisibility: ModelManager.toggleTrackVisibility,
     applyStoredVisibility: ModelManager.applyStoredVisibility,
     setMarkerVisibility: ModelManager.setMarkerVisibility,
-    // Time slider
-    initializeTimeSlider: TimeSlider.initializeTimeSlider,
-    updateTimeSlider: TimeSlider.updateTimeSlider,
-    showTimeSlider: TimeSlider.showTimeSlider,
-    hideTimeSlider: TimeSlider.hideTimeSlider,
-    getCurrentTau: TimeSlider.getCurrentTau,
 };
 
 window.MODEL_COLORS = ModelManager.MODEL_COLORS;

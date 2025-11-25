@@ -6,6 +6,7 @@
 import { formatDateTime, formatCycloneName } from './parser.js';
 import { getModelColor, formatModelName, toggleTrackVisibility, applyStoredVisibility, getModelCategories, ensureDefaultVisibility, showAllTracks, getHiddenTracks } from './model-manager.js';
 import { renderTracks, clearAdeckLayers } from './renderer.js';
+import { updateTimeSlider } from './time-slider.js';
 import * as State from '../core/state-manager.js';
 import * as TrackRenderer from '../visualization/track-renderer.js';
 
@@ -19,75 +20,125 @@ export function updateStormList(storms = []) {
   if (!container) {
     container = document.createElement('div');
     container.id = 'adeck-storm-list';
-    container.className = 'panel';
-    container.style.position = 'absolute';
-    container.style.top = '70px';
-    container.style.right = '10px';
-    container.style.maxHeight = '50vh';
-    container.style.overflow = 'auto';
+    container.className = 'panel floating-dialog'; // Use standard dialog class
+    container.style.bottom = '20px';
+    container.style.left = '20px';
+    container.style.width = '280px'; // Fixed width for grid
     container.style.zIndex = 1600;
     container.addEventListener('click', (e) => e.stopPropagation());
     document.body.appendChild(container);
   }
   container.innerHTML = '';
 
+  // Header
   const header = document.createElement('div');
-  header.style.display = 'flex';
-  header.style.justifyContent = 'space-between';
-  header.style.alignItems = 'center';
-  header.style.marginBottom = '6px';
-  const title = document.createElement('strong');
+  header.className = 'dialog-header';
+  
+  const titleGroup = document.createElement('div');
+  titleGroup.style.display = 'flex';
+  titleGroup.style.alignItems = 'center';
+  titleGroup.style.gap = '8px';
+
+  const title = document.createElement('h3');
   title.textContent = `Models (${storms.length})`;
-  const btnRow = document.createElement('div');
-  const showAllBtn = document.createElement('button'); showAllBtn.textContent = 'Show All'; showAllBtn.style.marginRight = '6px';
-  const hideAllBtn = document.createElement('button'); hideAllBtn.textContent = 'Hide All';
+  
+  // Collapse button
+  const collapseBtn = document.createElement('button');
+  collapseBtn.className = 'panel-collapse-btn';
+  collapseBtn.textContent = '▼';
+  collapseBtn.onclick = () => {
+    const grid = container.querySelector('.model-grid');
+    const isCollapsed = grid.style.display === 'none';
+    grid.style.display = isCollapsed ? 'grid' : 'none';
+    collapseBtn.textContent = isCollapsed ? '▼' : '▶';
+  };
+
+  titleGroup.appendChild(title);
+  titleGroup.appendChild(collapseBtn);
+
+  const controls = document.createElement('div');
+  controls.className = 'panel-header-controls';
+  
+  const showAllBtn = document.createElement('button'); 
+  showAllBtn.className = 'btn small secondary';
+  showAllBtn.textContent = 'All'; 
+  showAllBtn.title = 'Show All';
+  
+  const hideAllBtn = document.createElement('button'); 
+  hideAllBtn.className = 'btn small secondary';
+  hideAllBtn.textContent = 'None';
+  hideAllBtn.title = 'Hide All';
+
   showAllBtn.addEventListener('click', () => { try { showAllTracks(); refreshStormListVisibility(); } catch {} });
   hideAllBtn.addEventListener('click', () => {
     try {
-      const hidden = getHiddenTracks();
       const ids = storms.map(s => s.id);
-      ids.forEach(id => hidden[id] = true);
-      // Persist via toggle path: hide if currently visible
       ids.forEach(id => toggleTrackVisibility(id, false));
       refreshStormListVisibility();
     } catch {}
   });
-  btnRow.appendChild(showAllBtn); btnRow.appendChild(hideAllBtn);
-  header.appendChild(title); header.appendChild(btnRow);
+
+  controls.appendChild(showAllBtn); 
+  controls.appendChild(hideAllBtn);
+  
+  header.appendChild(titleGroup); 
+  header.appendChild(controls);
   container.appendChild(header);
+
+  // Grid Content
+  const grid = document.createElement('div');
+  grid.className = 'model-grid';
 
   if (!storms.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
+    empty.style.padding = '20px';
+    empty.style.textAlign = 'center';
+    empty.style.color = 'var(--text-secondary)';
     empty.textContent = 'No tracks available';
-    container.appendChild(empty);
-    return;
+    grid.style.display = 'block'; // Override grid for empty message
+    grid.appendChild(empty);
+  } else {
+    storms.forEach((s) => {
+      const chip = document.createElement('div');
+      chip.className = 'model-chip';
+      chip.dataset.trackId = s.id;
+      
+      // Use model ID as label
+      let modelId = String(s.model || 'UNK').toUpperCase();
+      // Strip basin prefix if present (e.g. AL-CARQ -> CARQ)
+      if (modelId.includes('-')) {
+        const parts = modelId.split('-');
+        if (parts.length > 1) modelId = parts[parts.length - 1];
+      }
+      chip.textContent = modelId;
+      
+      // Set color
+      const color = getModelColor(s.model);
+      chip.style.backgroundColor = color;
+      chip.style.borderColor = color; // Border matches bg for solid look
+
+      // Initial visibility state
+      const hidden = getHiddenTracks();
+      if (hidden[s.id]) {
+        chip.classList.add('hidden');
+      }
+
+      // Click handler
+      chip.addEventListener('click', () => {
+        toggleTrackVisibility(s.id);
+        // UI update handled by refreshStormListVisibility but we can optimistically toggle class here for snapiness
+        chip.classList.toggle('hidden');
+      });
+
+      // Tooltip
+      chip.title = `${formatModelName(s.model)}\nInit: ${s.init ? formatDateTime(s.init) : 'N/A'}`;
+
+      grid.appendChild(chip);
+    });
   }
-
-  const list = document.createElement('div');
-  storms.forEach((s) => {
-    const row = document.createElement('div');
-    row.className = 'model-row';
-    row.style.borderLeft = `4px solid ${getModelColor(s.model)}`;
-    row.style.padding = '6px 8px';
-    row.style.margin = '4px 0';
-    row.dataset.trackId = s.id;
-
-    const name = document.createElement('div');
-    name.textContent = `${formatModelName(s.model)} — ${s.init ? formatDateTime(s.init) : ''}`;
-
-    const btn = document.createElement('button');
-    btn.className = 'visibility-toggle';
-    const hidden = getHiddenTracks();
-    btn.textContent = hidden[s.id] ? '🚫' : '👁️';
-    btn.style.marginLeft = '8px';
-    btn.addEventListener('click', () => toggleTrackVisibility(s.id));
-
-    row.appendChild(name);
-    row.appendChild(btn);
-    list.appendChild(row);
-  });
-  container.appendChild(list);
+  
+  container.appendChild(grid);
   console.info('[Adeck Dialog] Storm list updated with', storms.length, 'item(s)');
 }
 
@@ -123,14 +174,19 @@ export function displayTracksByInitTime(selectedInitTime, storms = [], map = win
   try { clearAdeckLayers(map); } catch { /* no-op */ }
   if (filtered.length) {
     console.info('[Adeck Dialog] Rendering', filtered.length, 'track(s) for init', selectedInitTime);
-    try { ensureDefaultVisibility(filtered.map(s => s.id)); } catch {}
+    const trackIds = filtered.map(s => s.id);
+    try { ensureDefaultVisibility(trackIds); } catch {}
     if (renderCb === renderTracks) {
       // Renderer supports completion callback
       renderCb(filtered, map, () => {
         try { setTimeout(() => { applyStoredVisibility(); refreshStormListVisibility();
           try {
             const visibleCount = typeof window.verifyAdeckLayers === 'function' ? window.verifyAdeckLayers() : -1;
-            if (visibleCount === 0) window.showNotification?.('Tracks loaded but currently hidden. Use 👁️ to show.', 'warning', 4000);
+            if (visibleCount === 0) {
+              console.warn('[Adeck Dialog] No visible tracks after render; forcing showAllTracks().');
+              try { showAllTracks(); refreshStormListVisibility(); } catch {}
+              window.showNotification?.('Tracks were hidden by previous preferences. Click "Show All" or use the 👁️ icons to adjust visibility.', 'warning', 5000);
+            }
           } catch {}
         }, 100); } catch {}
       });
@@ -141,6 +197,14 @@ export function displayTracksByInitTime(selectedInitTime, storms = [], map = win
     }
   }
   updateStormList(filtered);
+  try { updateTimeSlider(filtered); } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent('adeck-loaded', { detail: { trackCount: filtered.length } }));
+    const pref = (typeof window !== 'undefined' && window.localStorage)
+      ? window.localStorage.getItem('adeckShowStructures')
+      : null;
+    if (pref !== 'false') window.toggleAdeckStructures?.(true);
+  } catch {}
   // Note: applyStoredVisibility is now called after render completes via callback
 
   // Sync single-track view into shared state for keyboard navigation
@@ -206,30 +270,28 @@ export function highlightModelRow(modelId) {
 }
 
 export function initializeAdeckDialog() {
-  // On map movements, re-apply visibility to maintain consistency
-  const map = window.map;
-  if (map && typeof map.on === 'function') {
-    map.on('zoomend moveend', () => applyStoredVisibility());
-  }
   // Initialize a placeholder list container if not present
   updateStormList([]);
   // Expose renderer for legacy hooks if needed
   window.renderAdeckTracks = renderTracks;
-
-  // Listen for adeck-loaded events to ensure tracks start visible
-  try {
-    window.addEventListener('adeck-loaded', () => { try { showAllTracks(); refreshStormListVisibility(); } catch {} });
-  } catch {}
+  // Expose list visibility refresher for diagnostics and external calls
+  window.refreshStormListVisibility = refreshStormListVisibility;
+  window.updateStormList = updateStormList;
+  // Note: Do not force-show tracks on load. If an 'adeck-loaded' event is used elsewhere,
+  // it must provide { detail: { trackIds: string[] } } and be handled by that code path
+  // with ensureDefaultVisibility(trackIds) followed by applyStoredVisibility().
 }
 
 /** Update visibility icons to reflect actual state */
 export function refreshStormListVisibility() {
   try {
     const hidden = getHiddenTracks();
-    document.querySelectorAll('#adeck-storm-list .model-row').forEach((row) => {
-      const id = row?.dataset?.trackId;
-      const btn = row.querySelector('.visibility-toggle');
-      if (btn && id) btn.textContent = hidden[id] ? '🚫' : '👁️';
+    document.querySelectorAll('#adeck-storm-list .model-chip').forEach((chip) => {
+      const id = chip?.dataset?.trackId;
+      if (id) {
+        if (hidden[id]) chip.classList.add('hidden');
+        else chip.classList.remove('hidden');
+      }
     });
   } catch {}
 }

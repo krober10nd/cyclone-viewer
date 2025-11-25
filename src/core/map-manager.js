@@ -21,6 +21,11 @@ export const basemaps = {
     attribution: '&copy; OpenStreetMap contributors',
     crossOrigin: true,
   }),
+  dark: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; CARTO',
+    crossOrigin: true,
+  }),
   carto: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; CARTO',
@@ -45,6 +50,7 @@ export const basemaps = {
 
 export const basemapDisplayNames = {
   osm: 'OpenStreetMap',
+  dark: 'CARTO Dark Matter',
   carto: 'CARTO Voyager',
   topo: 'OpenTopoMap',
   satellite: 'Satellite (Esri World Imagery)',
@@ -74,10 +80,14 @@ export function initializeMap() {
   State.setMap(map);
   window.map = map; // compatibility
 
-  // Default to OSM for reliability (reduced CORS/network issues); users can switch to Satellite
-  const defaultBasemap = State.getActiveBasemapId() || 'osm';
+  // Default to dark basemap for better contrast; respect stored preference if present
+  const defaultBasemap = State.getActiveBasemapId() || 'dark';
   console.info('[Map Manager] Changing to basemap:', defaultBasemap);
   changeBasemap(defaultBasemap);
+  try {
+    const diag = verifyBasemapLoaded(map);
+    console.info('[Map Manager] Basemap diagnostics immediately after change:', diag);
+  } catch {}
 
   // Emit readiness event for adeck-reader.js or others
   setTimeout(() => {
@@ -135,8 +145,14 @@ export function changeBasemap(basemapId, options = {}) {
   });
   layer.on('tileerror', onErr);
   layer.addTo(map);
+  try {
+    const hasLayer = !!(map && map.hasLayer && map.hasLayer(layer));
+    console.info('[Map Manager] Basemap layer added to map:', hasLayer);
+  } catch {}
   State.setActiveBasemapId(basemapId);
   State.setActiveBasemapLayer(layer);
+  // Sync UI dropdown if present
+  try { const sel = document.getElementById('basemap-selector'); if (sel) sel.value = basemapId; } catch {}
   console.info('[Map Manager] Basemap changed successfully to:', basemapId);
 
   // If satellite selected and tiles don't start loading quickly, fallback
@@ -146,7 +162,7 @@ export function changeBasemap(basemapId, options = {}) {
         console.warn('[Map Manager] Satellite tiles not loaded within timeout. Falling back to OSM.');
         try { changeBasemap('osm'); if (window.showNotification) window.showNotification('Satellite tiles delayed. Falling back to OSM.', 'warning', 4000); } catch {}
       }
-    }, 5000);
+    }, 3000);
   }
 }
 
@@ -155,6 +171,25 @@ export function handleBasemapTileError(basemapId) {
   if (basemapErrorCounters[basemapId] >= MAX_BASEMAP_TILE_ERRORS && basemapId !== 'osm') {
     // Fallback to OSM
     try { changeBasemap('osm'); if (window.showNotification) window.showNotification('Satellite tiles failed. Falling back to OSM.', 'warning', 4000); } catch {}
+  }
+}
+
+// Basic diagnostics helper to inspect basemap loading state
+export function verifyBasemapLoaded(map = State.getMap()) {
+  try {
+    const m = map || State.getMap();
+    if (!m) return { hasMap: false };
+    const layers = Object.values(m._layers || {});
+    const tileLayers = layers.filter((ly) => !!ly._url);
+    const activeId = State.getActiveBasemapId();
+    return {
+      hasMap: true,
+      activeBasemapId: activeId,
+      tileLayerCount: tileLayers.length,
+      hasActiveTileLayer: tileLayers.length > 0,
+    };
+  } catch (e) {
+    return { hasMap: false, error: String(e) };
   }
 }
 
